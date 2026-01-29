@@ -16,7 +16,8 @@ export default function LoginPage() {
         e.preventDefault();
         setError("");
         setLoading(true);
-        const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+        const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL
+            || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:5000' : '/api');
 
         try {
             const res = await fetch(`${API_BASE}/super-admin/login`, {

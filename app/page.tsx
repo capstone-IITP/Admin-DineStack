@@ -644,7 +644,8 @@ const AuditView = ({ logs }: AuditViewProps) => (
 
 export default function TapTableAdmin() {
   const router = useRouter();
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL
+    || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:5000' : '/api');
   const [isLoading, setIsLoading] = useState(true); // State for dashboard data
   const [stats, setStats] = useState<any>(null);
   const [currentView, setCurrentView] = useState('dashboard');
