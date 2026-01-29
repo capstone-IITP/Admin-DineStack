@@ -668,7 +668,7 @@ export default function TapTableAdmin() {
       }
 
       const headers = { "Authorization": `Bearer ${token}` };
-      const baseUrl = "http://localhost:5000/super-admin/dashboard";
+      const baseUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL}/super-admin/dashboard`;
 
       try {
         const [statsRes, restRes, keysRes, devicesRes, logsRes] = await Promise.all([
@@ -731,7 +731,7 @@ export default function TapTableAdmin() {
     if (!name) return;
     try {
       const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
-      const res = await fetch('http://localhost:5000/super-admin/dashboard/restaurants', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/super-admin/dashboard/restaurants`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -757,7 +757,7 @@ export default function TapTableAdmin() {
   const handleGenerateKey = async (restaurantName: string) => {
     try {
       const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
-      const res = await fetch('http://localhost:5000/super-admin/activation-codes', {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/super-admin/activation-codes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -774,7 +774,7 @@ export default function TapTableAdmin() {
       if (res.ok) {
         addLog('KEY_GENERATE', restaurantName, 'Generated one-time activation key');
         // Refresh keys
-        const keysRes = await fetch('http://localhost:5000/super-admin/dashboard/keys', {
+        const keysRes = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/super-admin/dashboard/keys`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (keysRes.ok) setKeys(await keysRes.json());
@@ -796,7 +796,7 @@ export default function TapTableAdmin() {
 
     try {
       const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
-      const res = await fetch(`http://localhost:5000/super-admin/activation-codes/${keyToDelete}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/super-admin/activation-codes/${keyToDelete}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -825,7 +825,7 @@ export default function TapTableAdmin() {
 
     try {
       const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
-      const res = await fetch(`http://localhost:5000/super-admin/dashboard/restaurants/${restaurantToDelete}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/super-admin/dashboard/restaurants/${restaurantToDelete}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -859,7 +859,7 @@ export default function TapTableAdmin() {
 
     try {
       const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
-      const res = await fetch(`http://localhost:5000/super-admin/dashboard/restaurants/${restaurantToSuspend}/status`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/super-admin/dashboard/restaurants/${restaurantToSuspend}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
