@@ -748,9 +748,9 @@ export default function TapTableAdmin() {
         const errData = await res.json();
         alert(`Failed to create restaurant: ${errData.message || 'Unknown error'}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to create restaurant:", err);
-      alert("Failed to create restaurant. Check console for details.");
+      alert(`Failed to create restaurant: ${err.message || 'Network error or invalid response. Check console for details.'}`);
     }
   };
 
