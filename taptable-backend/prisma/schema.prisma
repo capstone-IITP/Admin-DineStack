@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model SuperAdmin {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+}
+
+enum RestaurantStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+model ActivationCode {
+  id           String   @id @default(uuid())
+  code         String   @unique
+  entityName   String?
+  plan         String
+  durationDays Int
+  maxTables    Int
+  isUsed       Boolean  @default(false)
+  status       String   @default("ACTIVE") // ACTIVE, INVALIDATED
+  expiresAt    DateTime
+  usedAt       DateTime?
+  restaurant   Restaurant?
+  createdAt    DateTime @default(now())
+}
+
+model Restaurant {
+  id                   String           @id @default(uuid())
+  name                 String
+  ownerEmail           String?
+  status               RestaurantStatus @default(ACTIVE)
+  isActive             Boolean          @default(true) // Deprecated, use status
+  subscriptionEndsAt   DateTime?
+  revokedAt            DateTime?
+  revokedBy            String?
+  revocationReason     String?
+  adminPin             String?
+  kitchenPin           String?
+  activationCodeId     String?          @unique
+  activationCode       ActivationCode?  @relation(fields: [activationCodeId], references: [id], onDelete: SetNull)
+  createdAt            DateTime         @default(now())
+  devices              Device[]
+}
+
+model Device {
+  id           String     @id @default(uuid())
+  hash         String     @unique
+  type         String
+  status       String
+  lastSeen     DateTime   @default(now())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  createdAt    DateTime   @default(now())
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  action    String
+  user      String
+  target    String
+  details   String
+  timestamp DateTime @default(now())
+}

@@ -1,0 +1,5 @@
+[TEST] Logging in...
+[ERROR] Verification FAILED: Login failed: 401 {"message":"Invalid credentials"}
+Error: Login failed: 401 {"message":"Invalid credentials"}
+    at main (E:\OneDrive\Desktop\TapTable_Admin\taptable-backend\verify_status_flow.js:32:33)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
