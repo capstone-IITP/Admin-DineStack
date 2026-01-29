@@ -653,7 +653,7 @@ export default function TapTableAdmin() {
   // Fetch data on load
   useEffect(() => {
     const fetchData = async () => {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
       if (!token) {
         router.push('/login');
         return;
@@ -690,7 +690,7 @@ export default function TapTableAdmin() {
   }, [router]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
+    localStorage.removeItem('SUPER_ADMIN_TOKEN');
     localStorage.removeItem('admin');
     router.push('/login');
   };
@@ -722,7 +722,7 @@ export default function TapTableAdmin() {
   const handleNewRestaurant = async (name: string) => {
     if (!name) return;
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
       const res = await fetch('http://localhost:5000/super-admin/dashboard/restaurants', {
         method: 'POST',
         headers: {
@@ -736,15 +736,19 @@ export default function TapTableAdmin() {
         const newRest: Restaurant = await res.json();
         setRestaurants([newRest, ...restaurants]);
         addLog('ENTITY_CREATE', newRest.id, `Created entity ${name}`);
+      } else {
+        const errData = await res.json();
+        alert(`Failed to create restaurant: ${errData.message || 'Unknown error'}`);
       }
     } catch (err) {
       console.error("Failed to create restaurant:", err);
+      alert("Failed to create restaurant. Check console for details.");
     }
   };
 
   const handleGenerateKey = async (restaurantName: string) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
       const res = await fetch('http://localhost:5000/super-admin/activation-codes', {
         method: 'POST',
         headers: {
@@ -783,7 +787,7 @@ export default function TapTableAdmin() {
     if (!keyToDelete) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
       const res = await fetch(`http://localhost:5000/super-admin/activation-codes/${keyToDelete}`, {
         method: 'DELETE',
         headers: {

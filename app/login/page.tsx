@@ -31,7 +31,7 @@ export default function LoginPage() {
             }
 
             // Store auth data
-            localStorage.setItem("token", data.token);
+            localStorage.setItem("SUPER_ADMIN_TOKEN", data.token);
             localStorage.setItem("admin", JSON.stringify(data.admin));
 
             // Redirect to dashboard
