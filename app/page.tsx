@@ -84,11 +84,15 @@ const StatusBadge = ({ status }: StatusBadgeProps) => {
   switch (status) {
     case 'Operational':
     case 'Active':
+    case 'ACTIVE':
     case 'Online':
     case 'Used':
       styleClass = "bg-[#1F1F1F] text-white border-[#1F1F1F]";
       break;
     case 'Suspended':
+    case 'SUSPENDED':
+    case 'REVOKED':
+    case 'Revoked':
     case 'Expired':
     case 'Offline':
       styleClass = "bg-red-50 text-[#8D0B41] border-[#8D0B41] border-dashed";
@@ -363,7 +367,7 @@ const RestaurantsView = ({ data, onSuspend, onNewRestaurant, onDelete }: Restaur
                 <td className="px-6 py-4"><StatusBadge status={r.status} /></td>
                 <td className="px-6 py-4 text-right">
                   <button onClick={() => onSuspend(r.id)} className="text-[#1F1F1F] hover:text-[#8D0B41] font-mono text-[10px] font-bold uppercase tracking-widest underline decoration-1 underline-offset-4 mr-4">
-                    {r.status === 'Suspended' ? 'Resume Service' : 'Suspend Service'}
+                    {(r.status === 'Suspended' || r.status === 'SUSPENDED') ? 'Resume Service' : 'Suspend Service'}
                   </button>
                   <button onClick={() => onDelete(r.id)} className="text-red-500 hover:text-red-700 font-mono text-[10px] font-bold uppercase tracking-widest underline decoration-1 underline-offset-4">
                     Delete
@@ -649,6 +653,10 @@ export default function TapTableAdmin() {
   const [logs, setLogs] = useState<Log[]>([]);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [keyToDelete, setKeyToDelete] = useState<string | null>(null);
+  const [restaurantDeleteModalOpen, setRestaurantDeleteModalOpen] = useState(false);
+  const [restaurantToDelete, setRestaurantToDelete] = useState<string | null>(null);
+  const [suspendModalOpen, setSuspendModalOpen] = useState(false);
+  const [restaurantToSuspend, setRestaurantToSuspend] = useState<string | null>(null);
 
   // Fetch data on load
   useEffect(() => {
@@ -807,12 +815,17 @@ export default function TapTableAdmin() {
     }
   };
 
-  const handleDeleteRestaurant = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this entity? This action is irreversible and will shut down all associated devices.")) return;
+  const handleDeleteRestaurant = (id: string) => {
+    setRestaurantToDelete(id);
+    setRestaurantDeleteModalOpen(true);
+  };
+
+  const confirmDeleteRestaurant = async () => {
+    if (!restaurantToDelete) return;
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/super-admin/dashboard/restaurants/${id}`, {
+      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
+      const res = await fetch(`http://localhost:5000/super-admin/dashboard/restaurants/${restaurantToDelete}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -820,23 +833,57 @@ export default function TapTableAdmin() {
       });
 
       if (res.ok) {
-        addLog('ENTITY_DELETE', id, 'Deleted entity and associated devices');
-        setRestaurants(restaurants.filter(r => r.id !== id));
+        addLog('ENTITY_DELETE', restaurantToDelete, 'Deleted entity and associated devices');
+        setRestaurants(restaurants.filter(r => r.id !== restaurantToDelete));
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setRestaurantDeleteModalOpen(false);
+      setRestaurantToDelete(null);
     }
   };
 
   const handleSuspend = (id: string) => {
-    setRestaurants(restaurants.map(r => {
-      if (r.id === id) {
-        const newStatus = r.status === 'Suspended' ? 'Operational' : 'Suspended';
-        addLog('STATUS_CHANGE', id, `Changed status to ${newStatus}`);
-        return { ...r, status: newStatus };
+    setRestaurantToSuspend(id);
+    setSuspendModalOpen(true);
+  };
+
+  const confirmSuspendRestaurant = async () => {
+    if (!restaurantToSuspend) return;
+    const restaurant = restaurants.find(r => r.id === restaurantToSuspend);
+    if (!restaurant) return;
+
+    const currentStatus = restaurant.status;
+    const newStatus = (currentStatus === 'Suspended' || currentStatus === 'SUSPENDED') ? 'ACTIVE' : 'SUSPENDED';
+
+    try {
+      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
+      const res = await fetch(`http://localhost:5000/super-admin/dashboard/restaurants/${restaurantToSuspend}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          status: newStatus,
+          reason: newStatus === 'SUSPENDED' ? "Manual suspension by Super Admin" : "Manual reactivation",
+          revokedBy: "Super Admin"
+        })
+      });
+
+      if (res.ok) {
+        addLog('STATUS_CHANGE', restaurantToSuspend, `Changed status to ${newStatus}`);
+        setRestaurants(restaurants.map(r => r.id === restaurantToSuspend ? { ...r, status: newStatus } : r));
+      } else {
+        console.error("Failed to update status");
       }
-      return r;
-    }));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSuspendModalOpen(false);
+      setRestaurantToSuspend(null);
+    }
   };
 
   const handleSupportOverride = (type: string) => {
@@ -930,7 +977,7 @@ export default function TapTableAdmin() {
       <main className="flex-1 ml-72 p-12 bg-[#FFFFF0] min-h-screen">
         <div className="max-w-6xl mx-auto">
           {currentView === 'dashboard' && <DashboardView stats={stats} />}
-          {currentView === 'restaurants' && <RestaurantsView data={restaurants} onSuspend={() => { }} onNewRestaurant={handleNewRestaurant} onDelete={handleDeleteRestaurant} />}
+          {currentView === 'restaurants' && <RestaurantsView data={restaurants} onSuspend={handleSuspend} onNewRestaurant={handleNewRestaurant} onDelete={handleDeleteRestaurant} />}
           {currentView === 'keys' && <KeysView keys={keys} restaurants={restaurants} onGenerate={handleGenerateKey} onDelete={handleDeleteClick} />}
           {currentView === 'devices' && <DeviceView devices={devices} />}
           {currentView === 'support' && <SupportView onOverride={handleSupportOverride} />}
@@ -967,6 +1014,93 @@ export default function TapTableAdmin() {
             <h3 className="font-serif text-lg font-bold text-[#1F1F1F]">Revoke License Key?</h3>
             <p className="font-mono text-xs text-[#6A6A6A] mt-2">
               This action cannot be undone. The key will be permanently invalid.
+            </p>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Restaurant Delete Confirmation Modal */}
+      <Modal
+        isOpen={restaurantDeleteModalOpen}
+        onClose={() => setRestaurantDeleteModalOpen(false)}
+        title="Confirm Entity Deletion"
+        variant="danger"
+        confirmText="Delete Entity"
+        onConfirm={confirmDeleteRestaurant}
+      >
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 bg-red-100 text-[#8D0B41] rounded-full mx-auto flex items-center justify-center">
+            <AlertTriangle size={24} />
+          </div>
+          <div>
+            <h3 className="font-serif text-lg font-bold text-[#1F1F1F]">Delete Restaurant Entity?</h3>
+            <p className="font-mono text-xs text-[#6A6A6A] mt-2 max-w-xs mx-auto">
+              Are you sure you want to delete this entity? This action is irreversible and will shut down all associated devices.
+            </p>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Suspend/Resume Confirmation Modal */}
+      <Modal
+        isOpen={suspendModalOpen}
+        onClose={() => setSuspendModalOpen(false)}
+        title={
+          (() => {
+            const r = restaurants.find(r => r.id === restaurantToSuspend);
+            if (!r) return "Confirm Status Change";
+            const isSuspended = r.status === 'Suspended' || r.status === 'SUSPENDED';
+            return isSuspended ? "Confirm Reactivation" : "Confirm Suspension";
+          })()
+        }
+        variant={
+          (() => {
+            const r = restaurants.find(r => r.id === restaurantToSuspend);
+            if (!r) return "primary";
+            const isSuspended = r.status === 'Suspended' || r.status === 'SUSPENDED';
+            return isSuspended ? "primary" : "danger";
+          })()
+        }
+        confirmText={
+          (() => {
+            const r = restaurants.find(r => r.id === restaurantToSuspend);
+            if (!r) return "Confirm";
+            const isSuspended = r.status === 'Suspended' || r.status === 'SUSPENDED';
+            return isSuspended ? "Resume Service" : "Suspend Service";
+          })()
+        }
+        onConfirm={confirmSuspendRestaurant}
+      >
+        <div className="text-center space-y-4">
+          <div className={`w-12 h-12 rounded-full mx-auto flex items-center justify-center ${(() => {
+            const r = restaurants.find(r => r.id === restaurantToSuspend);
+            const isSuspended = r?.status === 'Suspended' || r?.status === 'SUSPENDED';
+            return isSuspended ? "bg-green-100 text-green-700" : "bg-red-100 text-[#8D0B41]";
+          })()}`}>
+            {(() => {
+              const r = restaurants.find(r => r.id === restaurantToSuspend);
+              const isSuspended = r?.status === 'Suspended' || r?.status === 'SUSPENDED';
+              return isSuspended ? <RefreshCw size={24} /> : <AlertTriangle size={24} />;
+            })()}
+          </div>
+          <div>
+            <h3 className="font-serif text-lg font-bold text-[#1F1F1F]">
+              {(() => {
+                const r = restaurants.find(r => r.id === restaurantToSuspend);
+                if (!r) return "Change Status?";
+                const isSuspended = r.status === 'Suspended' || r.status === 'SUSPENDED';
+                return isSuspended ? `Reactivate ${r.name}?` : `Suspend ${r.name}?`;
+              })()}
+            </h3>
+            <p className="font-mono text-xs text-[#6A6A6A] mt-2 max-w-xs mx-auto">
+              {(() => {
+                const r = restaurants.find(r => r.id === restaurantToSuspend);
+                if (!r) return "";
+                const isSuspended = r.status === 'Suspended' || r.status === 'SUSPENDED';
+                return isSuspended
+                  ? "This will restore service access immediately. All devices will be able to connect."
+                  : "This will immediately block all access for this entity. Active sessions may be terminated.";
+              })()}
             </p>
           </div>
         </div>
