@@ -16,9 +16,10 @@ export default function LoginPage() {
         e.preventDefault();
         setError("");
         setLoading(true);
+        const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/super-admin/login`, {
+            const res = await fetch(`${API_BASE}/super-admin/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password }),
