@@ -2,12 +2,8 @@
     "version": 2,
     "rewrites": [
         {
-            "source": "/api/(.*)",
-            "destination": "/api"
-        },
-        {
-            "source": "/super-admin/(.*)",
-            "destination": "/api"
+            "source": "/super-admin/:path*",
+            "destination": "/api/super-admin/:path*"
         }
     ]
 }
