@@ -1,5 +1,4 @@
 const express = require("express");
-const cors = require("cors");
 require("dotenv").config();
 
 const authRoutes = require("./auth/auth.routes");
@@ -9,30 +8,42 @@ const deviceRoutes = require("./activation/device.routes");
 
 const app = express();
 
-// CORS configuration - properly handle cross-origin requests
-const corsOptions = {
-    origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl)
-        if (!origin) return callback(null, true);
+// Allowed origins for CORS
+const allowedOrigins = [
+    "http://localhost:3000",
+    "https://admin-taptable.vercel.app"
+];
 
-        const allowedOrigins = process.env.ALLOWED_ORIGINS
-            ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-            : ['*'];
+// Dynamic CORS middleware
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
 
-        if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            console.log(`CORS blocked origin: ${origin}`);
-            callback(null, true); // Allow anyway for development
+    // Allow server-to-server / curl requests (no origin header)
+    if (!origin) {
+        return next();
+    }
+
+    if (allowedOrigins.includes(origin)) {
+        res.header("Access-Control-Allow-Origin", origin);
+        res.header("Access-Control-Allow-Credentials", "true");
+        res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+        res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+
+        // Handle OPTIONS preflight requests (CRITICAL for POST requests)
+        if (req.method === "OPTIONS") {
+            return res.sendStatus(200);
         }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    optionsSuccessStatus: 200 // Some legacy browsers choke on 204
-};
 
-app.use(cors(corsOptions));
+        return next();
+    }
+
+    console.error("CORS blocked origin:", origin);
+    return res.status(403).json({
+        error: "CORS blocked",
+        origin
+    });
+});
+
 app.use(express.json());
 
 // health check
