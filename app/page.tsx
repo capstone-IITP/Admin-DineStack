@@ -72,6 +72,18 @@ interface Log {
 const generateId = () => Math.random().toString(36).substr(2, 9).toUpperCase();
 const generateKey = () => `TAP-${Math.random().toString(36).substr(2, 4).toUpperCase()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
 
+// Safe JSON parser to handle non-JSON responses (like HTML error pages)
+const safeJsonParse = async (res: Response): Promise<{ success: boolean; data?: any; error?: string }> => {
+  const text = await res.text();
+  try {
+    const json = JSON.parse(text);
+    return { success: true, data: json };
+  } catch {
+    console.error("Non-JSON response:", text);
+    return { success: false, error: "Server returned an invalid response. Check if backend is running." };
+  }
+};
+
 // --- UI COMPONENTS ---
 
 interface StatusBadgeProps {
@@ -733,6 +745,7 @@ export default function TapTableAdmin() {
     if (!name) return;
     try {
       const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
+      console.log('[DEBUG] Creating restaurant with token:', token ? `${token.substring(0, 20)}...` : 'MISSING');
       const res = await fetch(`${API_BASE}/super-admin/dashboard/restaurants`, {
         method: 'POST',
         headers: {
@@ -742,13 +755,19 @@ export default function TapTableAdmin() {
         body: JSON.stringify({ name })
       });
 
+      const parsed = await safeJsonParse(res);
+
+      if (!parsed.success) {
+        alert(`Failed to create restaurant: ${parsed.error}`);
+        return;
+      }
+
       if (res.ok) {
-        const newRest: Restaurant = await res.json();
+        const newRest: Restaurant = parsed.data;
         setRestaurants([newRest, ...restaurants]);
         addLog('ENTITY_CREATE', newRest.id, `Created entity ${name}`);
       } else {
-        const errData = await res.json();
-        alert(`Failed to create restaurant: ${errData.message || 'Unknown error'}`);
+        alert(`Failed to create restaurant: ${parsed.data?.message || 'Unknown error'}`);
       }
     } catch (err: any) {
       console.error("Failed to create restaurant:", err);

@@ -26,7 +26,15 @@ export default function LoginPage() {
                 body: JSON.stringify({ email, password }),
             });
 
-            const data = await res.json();
+            // Safe JSON parsing to handle non-JSON responses (like HTML error pages)
+            const text = await res.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch {
+                console.error("Non-JSON response from server:", text);
+                throw new Error("Server returned an invalid response. Please check if the backend is running.");
+            }
 
             if (!res.ok) {
                 throw new Error(data.message || "Login failed");
