@@ -14,6 +14,22 @@ const allowedOrigins = [
     "https://admin-taptable.vercel.app"
 ];
 
+// Check if origin is allowed (supports Vercel preview deployments)
+function isOriginAllowed(origin) {
+    if (!origin) return true;
+
+    // Exact match for known origins
+    if (allowedOrigins.includes(origin)) return true;
+
+    // Allow all Vercel preview deployments for admin-taptable
+    // Pattern: https://admin-taptable-*.vercel.app
+    if (origin.match(/^https:\/\/admin-taptable(-[a-z0-9]+)*\.vercel\.app$/)) {
+        return true;
+    }
+
+    return false;
+}
+
 // Dynamic CORS middleware
 app.use((req, res, next) => {
     const origin = req.headers.origin;
@@ -23,7 +39,7 @@ app.use((req, res, next) => {
         return next();
     }
 
-    if (allowedOrigins.includes(origin)) {
+    if (isOriginAllowed(origin)) {
         res.header("Access-Control-Allow-Origin", origin);
         res.header("Access-Control-Allow-Credentials", "true");
         res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
