@@ -27,6 +27,11 @@ function isOriginAllowed(origin) {
         return true;
     }
 
+    // Allow all localhost ports for development
+    if (origin.match(/^http:\/\/localhost:\d+$/)) {
+        return true;
+    }
+
     return false;
 }
 
