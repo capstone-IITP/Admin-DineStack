@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma db push --schema=taptable-backend/prisma/schema.prisma && node init-db.js && next build",
+    "build": "prisma db push --schema=taptable-backend/prisma/schema.prisma --accept-data-loss && node init-db.js && next build",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate --schema=taptable-backend/prisma/schema.prisma",
