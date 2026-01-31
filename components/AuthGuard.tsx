@@ -24,8 +24,11 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     const [isValidating, setIsValidating] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-    const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL
-        || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:5000' : '/api');
+    // Production: use same-origin (Vercel rewrites handle routing)
+    // Development: use localhost
+    const API_BASE = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+        ? ''  // Same origin for production
+        : (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000');
 
     useEffect(() => {
         // Skip auth check for login page

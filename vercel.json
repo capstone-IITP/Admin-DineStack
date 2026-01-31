@@ -1,3 +1,13 @@
 {
-    "version": 2
+    "version": 2,
+    "rewrites": [
+        {
+            "source": "/super-admin/:path*",
+            "destination": "/api"
+        },
+        {
+            "source": "/health",
+            "destination": "/api"
+        }
+    ]
 }
