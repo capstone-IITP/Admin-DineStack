@@ -4,6 +4,27 @@ const prisma = new PrismaClient();
 const getDashboardStats = async (req, res) => {
     try {
         const activeNodes = await prisma.device.count({ where: { status: "Online" } });
+
+        // Registry count = total activation codes (source of truth)
+        const registryCount = await prisma.activationCode.count();
+
+        // Used licenses = activation codes that have been consumed
+        const usedLicenses = await prisma.activationCode.count({
+            where: { isUsed: true }
+        });
+
+        // Available licenses = unused codes with ACTIVE status (not INVALIDATED or expired)
+        const availableLicenses = await prisma.activationCode.count({
+            where: {
+                isUsed: false,
+                status: 'ACTIVE',
+                expiresAt: { gte: new Date() }
+            }
+        });
+
+        const rawAllCodes = await prisma.activationCode.count();
+        console.log("DEBUG RAW COUNT:", rawAllCodes);
+
         const licensesIssued24h = await prisma.activationCode.count({
             where: {
                 createdAt: {
@@ -11,11 +32,21 @@ const getDashboardStats = async (req, res) => {
                 }
             }
         });
-        const incidents = await prisma.auditLog.count({ where: { action: "ERROR" } }); // Example logic
+        const incidents = await prisma.auditLog.count({ where: { action: "ERROR" } });
+
+        console.log("Dashboard Stats Debug:", {
+            registryCount,
+            usedLicenses,
+            availableLicenses,
+            licensesIssued24h
+        });
 
         res.json({
             apiGateway: "ONLINE",
             activeNodes,
+            registryCount,
+            usedLicenses,
+            availableLicenses,
             licensing: "ACTIVE",
             incidents,
             licensesIssued24h

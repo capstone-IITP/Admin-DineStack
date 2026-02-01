@@ -256,7 +256,7 @@ const Metric = ({ label, value, subtext, icon: Icon, trend = "" }: MetricProps) 
 
 // --- VIEWS ---
 
-const DashboardView = ({ stats }: { stats: any }) => (
+const DashboardView = ({ stats, onRefresh }: { stats: any, onRefresh: () => void }) => (
   <div className="space-y-8">
     <SectionHeader title="System Control" subtitle="Real-time Infrastructure Monitoring" />
 
@@ -271,9 +271,9 @@ const DashboardView = ({ stats }: { stats: any }) => (
       <Metric
         label="Active Nodes"
         value={stats?.activeNodes?.toString() || "0"}
-        subtext="Registry Count"
+        subtext={`${stats?.usedLicenses || 0} Used / ${stats?.availableLicenses || 0} Available`}
         icon={Server}
-        trend="+0"
+        trend={`+${stats?.registryCount || 0}`}
       />
       <Metric
         label="Licensing"
@@ -297,7 +297,13 @@ const DashboardView = ({ stats }: { stats: any }) => (
             <span className="text-5xl font-serif font-bold text-[#1F1F1F]">{stats?.licensesIssued24h || 0}</span>
             <span className="ml-3 text-sm font-mono text-[#6A6A6A] uppercase tracking-wide">Licenses Issued (24h)</span>
           </div>
-          <RefreshCw className="text-[#6A6A6A] mb-2" />
+          <button
+            onClick={onRefresh}
+            className="p-2 hover:bg-gray-100 rounded-full transition-all duration-300 active:rotate-180"
+            title="Refresh Stats"
+          >
+            <RefreshCw className="text-[#6A6A6A]" size={20} />
+          </button>
         </div>
         <div className="h-4 bg-gray-100 w-full border border-gray-200 mt-2">
           <div
@@ -676,41 +682,43 @@ export default function DineStackAdmin() {
   const [restaurantToSuspend, setRestaurantToSuspend] = useState<string | null>(null);
 
   // Fetch data on load
+  const fetchData = async () => {
+    const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+
+    const headers = { "Authorization": `Bearer ${token}` };
+    const baseUrl = `${API_BASE}/super-admin/dashboard`;
+
+    try {
+      setIsLoading(true); // Show loading state on refresh
+      const [statsRes, restRes, keysRes, devicesRes, logsRes] = await Promise.all([
+        fetch(`${baseUrl}/stats`, { headers, cache: 'no-store' }),
+        fetch(`${baseUrl}/restaurants`, { headers, cache: 'no-store' }),
+        fetch(`${baseUrl}/keys`, { headers, cache: 'no-store' }),
+        fetch(`${baseUrl}/devices`, { headers, cache: 'no-store' }),
+        fetch(`${baseUrl}/logs`, { headers, cache: 'no-store' })
+      ]);
+
+      if (statsRes.ok) setStats(await statsRes.json());
+      if (restRes.ok) setRestaurants(await restRes.json());
+      if (keysRes.ok) setKeys(await keysRes.json());
+      if (devicesRes.ok) setDevices(await devicesRes.json());
+      if (logsRes.ok) {
+        const logsData = await logsRes.json();
+        // Ensure dates are formatted as expected
+        setLogs(logsData);
+      }
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
-      if (!token) {
-        router.push('/login');
-        return;
-      }
-
-      const headers = { "Authorization": `Bearer ${token}` };
-      const baseUrl = `${API_BASE}/super-admin/dashboard`;
-
-      try {
-        const [statsRes, restRes, keysRes, devicesRes, logsRes] = await Promise.all([
-          fetch(`${baseUrl}/stats`, { headers }),
-          fetch(`${baseUrl}/restaurants`, { headers }),
-          fetch(`${baseUrl}/keys`, { headers }),
-          fetch(`${baseUrl}/devices`, { headers }),
-          fetch(`${baseUrl}/logs`, { headers })
-        ]);
-
-        if (statsRes.ok) setStats(await statsRes.json());
-        if (restRes.ok) setRestaurants(await restRes.json());
-        if (keysRes.ok) setKeys(await keysRes.json());
-        if (devicesRes.ok) setDevices(await devicesRes.json());
-        if (logsRes.ok) {
-          const logsData = await logsRes.json();
-          // Ensure dates are formatted as expected
-          setLogs(logsData);
-        }
-      } catch (error) {
-        console.error("Failed to fetch dashboard data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchData();
   }, [router]);
 
@@ -767,8 +775,8 @@ export default function DineStackAdmin() {
 
       if (res.ok) {
         const newRest: Restaurant = parsed.data;
-        setRestaurants([newRest, ...restaurants]);
         addLog('ENTITY_CREATE', newRest.id, `Created entity ${name}`);
+        fetchData(); // Refresh all data
       } else {
         alert(`Failed to create restaurant: ${parsed.data?.message || 'Unknown error'}`);
       }
@@ -797,11 +805,7 @@ export default function DineStackAdmin() {
 
       if (res.ok) {
         addLog('KEY_GENERATE', restaurantName, 'Generated one-time activation key');
-        // Refresh keys
-        const keysRes = await fetch(`${API_BASE}/super-admin/dashboard/keys`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (keysRes.ok) setKeys(await keysRes.json());
+        fetchData(); // Refresh all data
       }
     } catch (err) {
       console.error(err);
@@ -829,7 +833,7 @@ export default function DineStackAdmin() {
 
       if (res.ok) {
         addLog('KEY_DELETE', keyToDelete, 'Deleted activation key');
-        setKeys(keys.filter(k => k.id !== keyToDelete));
+        fetchData(); // Refresh all data
       }
     } catch (err) {
       console.error(err);
@@ -858,7 +862,7 @@ export default function DineStackAdmin() {
 
       if (res.ok) {
         addLog('ENTITY_DELETE', restaurantToDelete, 'Deleted entity and associated devices');
-        setRestaurants(restaurants.filter(r => r.id !== restaurantToDelete));
+        fetchData(); // Refresh all data
       }
     } catch (err) {
       console.error(err);
@@ -898,7 +902,7 @@ export default function DineStackAdmin() {
 
       if (res.ok) {
         addLog('STATUS_CHANGE', restaurantToSuspend, `Changed status to ${newStatus}`);
-        setRestaurants(restaurants.map(r => r.id === restaurantToSuspend ? { ...r, status: newStatus } : r));
+        fetchData(); // Refresh all data
       } else {
         console.error("Failed to update status");
       }
@@ -1000,7 +1004,7 @@ export default function DineStackAdmin() {
       {/* Main Content */}
       <main className="flex-1 ml-72 p-12 bg-[#FFFFF0] min-h-screen">
         <div className="max-w-6xl mx-auto">
-          {currentView === 'dashboard' && <DashboardView stats={stats} />}
+          {currentView === 'dashboard' && <DashboardView stats={stats} onRefresh={fetchData} />}
           {currentView === 'restaurants' && <RestaurantsView data={restaurants} onSuspend={handleSuspend} onNewRestaurant={handleNewRestaurant} onDelete={handleDeleteRestaurant} />}
           {currentView === 'keys' && <KeysView keys={keys} restaurants={restaurants} onGenerate={handleGenerateKey} onDelete={handleDeleteClick} />}
           {currentView === 'devices' && <DeviceView devices={devices} />}
