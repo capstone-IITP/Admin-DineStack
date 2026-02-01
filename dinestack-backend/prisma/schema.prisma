@@ -10,7 +10,7 @@ datasource db {
 
 model SuperAdmin {
   id        String   @id @default(uuid())
-  email     String   @unique
+  email     String
   password  String
   createdAt DateTime @default(now())
 }
@@ -32,31 +32,41 @@ model ActivationCode {
   status       String   @default("ACTIVE") // ACTIVE, INVALIDATED
   expiresAt    DateTime
   usedAt       DateTime?
-  restaurant   Restaurant?
+  restaurants   Restaurant[]
   createdAt    DateTime @default(now())
 }
 
 model Restaurant {
-  id                   String           @id @default(uuid())
-  name                 String
-  ownerEmail           String?
-  status               RestaurantStatus @default(ACTIVE)
-  isActive             Boolean          @default(true) // Deprecated, use status
-  subscriptionEndsAt   DateTime?
-  revokedAt            DateTime?
-  revokedBy            String?
-  revocationReason     String?
-  adminPin             String?
-  kitchenPin           String?
-  activationCodeId     String?          @unique
-  activationCode       ActivationCode?  @relation(fields: [activationCodeId], references: [id], onDelete: SetNull)
-  createdAt            DateTime         @default(now())
-  devices              Device[]
+  id                 String            @id @default(uuid())
+  name               String
+  ownerEmail         String?
+
+  // 🔧 STATUS — DB compatible (no drop/recreate)
+  status             String  @default("ACTIVE")
+  isActive           Boolean           @default(true) // Deprecated, use status
+
+  // 🔧 TEMPORARY FIELDS (DB me already exist, to avoid data loss)
+  forceReactivation  Boolean?
+  isRegistered       Boolean?
+  updatedAt          DateTime?
+
+  subscriptionEndsAt DateTime?
+  revokedAt          DateTime?
+  revokedBy          String?
+  revocationReason   String?
+  adminPin           String?
+  kitchenPin         String?
+
+  // 🔧 TEMPORARY: unique baad me lagayenge
+  activationCodeId   String?
+  activationCode     ActivationCode? @relation(fields: [activationCodeId], references: [id])
+  createdAt          DateTime           @default(now())
+  devices            Device[]
 }
 
 model Device {
   id           String     @id @default(uuid())
-  hash         String     @unique
+  hash         String
   type         String
   status       String
   lastSeen     DateTime   @default(now())
