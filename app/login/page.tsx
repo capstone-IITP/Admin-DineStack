@@ -63,14 +63,14 @@ export default function LoginPage() {
                 <div className="mb-8 text-center">
                     <div className="flex justify-center -mb-2">
                         <Image
-                            src="/assets/TapTable Bg Remove.png"
-                            alt="TapTable Logo"
+                            src="/assets/DineStack Bg Remove.png"
+                            alt="DineStack Logo"
                             width={120}
                             height={120}
                             className="object-contain"
                         />
                     </div>
-                    <h1 className="text-3xl font-serif font-bold tracking-tight mb-2">TAPTABLE</h1>
+                    <h1 className="text-3xl font-serif font-bold tracking-tight mb-2">DINESTACK</h1>
                     <p className="font-mono text-xs uppercase tracking-[0.2em] text-[#8D0B41]">Internal Console Access</p>
                 </div>
 
@@ -97,7 +97,7 @@ export default function LoginPage() {
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 className="w-full bg-[#FFFFF0] border border-[#1F1F1F] px-4 py-3 font-serif placeholder:text-gray-400 focus:outline-none focus:border-[#8D0B41] focus:shadow-[2px_2px_0px_0px_#8D0B41] transition-all"
-                                placeholder="admin@taptable.com"
+                                placeholder="admin@dinestack.in"
                             />
                         </div>
 

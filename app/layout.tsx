@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TapTable Admin",
+  title: "DineStack Admin",
   description: "Internal Control Console",
 };
 

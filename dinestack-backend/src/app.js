@@ -8,22 +8,31 @@ const deviceRoutes = require("./activation/device.routes");
 
 const app = express();
 
-// Allowed origins for CORS
-const allowedOrigins = [
-    "http://localhost:3000",
-    "https://admin-taptable.vercel.app"
-];
+// Allowed origins for CORS - configurable via environment variable
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+    : [
+        "http://localhost:3000",
+        "https://admin-dinestack.vercel.app",
+        "https://admin.dinestack.in"
+    ];
 
-// Check if origin is allowed (supports Vercel preview deployments)
+// Check if origin is allowed (supports Vercel preview deployments and custom domains)
 function isOriginAllowed(origin) {
+    // Allow server-to-server requests (no origin header)
     if (!origin) return true;
 
     // Exact match for known origins
     if (allowedOrigins.includes(origin)) return true;
 
-    // Allow all Vercel preview deployments for admin-taptable
-    // Pattern: https://admin-taptable-*.vercel.app
-    if (origin.match(/^https:\/\/admin-taptable(-[a-z0-9]+)*\.vercel\.app$/)) {
+    // Allow all Vercel preview deployments for admin-dinestack
+    // Pattern: https://admin-dinestack-*.vercel.app
+    if (origin.match(/^https:\/\/admin-dinestack(-[a-z0-9]+)*\.vercel\.app$/)) {
+        return true;
+    }
+
+    // Allow dinestack.in subdomains (e.g., admin.dinestack.in, app.dinestack.in)
+    if (origin.match(/^https:\/\/[a-z0-9-]+\.dinestack\.in$/)) {
         return true;
     }
 
@@ -69,7 +78,7 @@ app.use(express.json());
 
 // health check
 app.get("/", (req, res) => {
-    res.json({ message: "TapTable Backend is running on Vercel" });
+    res.json({ message: "DineStack Backend is running on Vercel" });
 });
 
 app.get("/health", (req, res) => {

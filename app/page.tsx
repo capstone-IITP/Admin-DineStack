@@ -654,7 +654,7 @@ const AuditView = ({ logs }: AuditViewProps) => (
 
 // --- MAIN LAYOUT ---
 
-export default function TapTableAdmin() {
+export default function DineStackAdmin() {
   const router = useRouter();
   // Production: use same-origin (Vercel rewrites handle routing)
   // Development: use localhost
@@ -941,15 +941,15 @@ export default function TapTableAdmin() {
           <div className="flex flex-col items-center text-white">
             <div className="mb-2 bg-white p-2 rounded-full">
               <Image
-                src="/assets/TapTable Bg Remove.png"
-                alt="TapTable Logo"
+                src="/assets/DineStack Bg Remove.png"
+                alt="DineStack Logo"
                 width={60}
                 height={60}
                 className="object-contain"
               />
             </div>
             <div className="text-center">
-              <h1 className="font-bold tracking-tight text-xl leading-none">TAPTABLE</h1>
+              <h1 className="font-bold tracking-tight text-xl leading-none">DINESTACK</h1>
               <span className="font-mono text-[10px] text-[#8D0B41] uppercase tracking-[0.2em]">Internal Console</span>
             </div>
           </div>
