@@ -56,9 +56,9 @@ model Restaurant {
 
 model Device {
   id           String     @id @default(uuid())
-  hash         String     @unique
-  type         String
-  status       String
+  hash         String     @unique @default(uuid())
+  type         String     @default("UNKNOWN")
+  status       String     @default("ACTIVE")
   lastSeen     DateTime   @default(now())
   restaurantId String
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
