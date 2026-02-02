@@ -4,21 +4,38 @@ const bcrypt = require("bcrypt");
 
 exports.createActivationCode = async (req, res) => {
     try {
-        const { entityName, plan, durationDays, maxTables } = req.body;
+        const { restaurantId, plan, durationDays, maxTables } = req.body;
 
-        if (!plan || !durationDays || !maxTables) {
-            return res.status(400).json({ message: "All fields are required" });
+        if (!restaurantId || !plan || !durationDays || !maxTables) {
+            return res.status(400).json({ message: "All fields are required (restaurantId, plan, duration, maxTables)" });
+        }
+
+        // Verify restaurant exists
+        const restaurant = await prisma.restaurant.findUnique({
+            where: { id: restaurantId },
+            include: { activationCode: true }
+        });
+
+        if (!restaurant) {
+            return res.status(404).json({ message: "Restaurant entity not found" });
+        }
+
+        if (restaurant.activationCode && restaurant.activationCode.status === 'ACTIVE' && !restaurant.activationCode.isUsed) {
+            return res.status(409).json({
+                message: "Restaurant already has an active, unused activation code",
+                code: restaurant.activationCode.code
+            });
         }
 
         const code = generateCode();
-
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + durationDays);
 
         const activationCode = await prisma.activationCode.create({
             data: {
                 code,
-                entityName,
+                restaurantId, // Direct linkage
+                entityName: restaurant.name, // Keep for backward compat
                 plan,
                 durationDays,
                 maxTables,
@@ -29,6 +46,9 @@ exports.createActivationCode = async (req, res) => {
         res.status(201).json(activationCode);
     } catch (error) {
         console.error(error);
+        if (error.code === 'P2002') {
+            return res.status(409).json({ message: "Restaurant already has an activation code assigned" });
+        }
         res.status(500).json({ message: "Failed to create activation code" });
     }
 };
@@ -37,6 +57,7 @@ exports.getAllActivationCodes = async (req, res) => {
     try {
         const codes = await prisma.activationCode.findMany({
             orderBy: { createdAt: "desc" },
+            include: { restaurant: true } // Include linked restaurant details
         });
         res.json(codes);
     } catch (error) {
@@ -64,56 +85,58 @@ exports.activateDevice = async (req, res) => {
             return res.status(400).json({ error: "Activation code is required" });
         }
 
-        // 1. Find the code
+        // 1. Find the code details
         const codeRecord = await prisma.activationCode.findUnique({
             where: { code: activationCode },
+            include: { restaurant: true } // Fetch linked restaurant immediately
         });
 
         if (!codeRecord) {
             return res.status(401).json({ error: "Invalid activation code" });
         }
 
-        // 2. Check if already used
+        // 2. Security Checks
         if (codeRecord.isUsed) {
             return res.status(409).json({ error: "Activation code already used" });
         }
 
-        // 3. Check expiry
         if (new Date() > new Date(codeRecord.expiresAt)) {
             return res.status(401).json({ error: "Activation code expired" });
         }
 
-        // 4. Check status
         if (codeRecord.status === 'INVALIDATED') {
             return res.status(401).json({ error: "Activation code has been invalidated" });
         }
 
-        // 5. Perform Activation (Transaction)
+        // 3. Strict 1-to-1 Activation Check
+        // If restaurant is ALREADY active via another code (shouldn't happen with unique check, but safe double-check)
+        // OR deeply check if restaurant has ANY used code? 
+        // Logic: One Restaurant = One Active License.
+        if (!codeRecord.restaurant) {
+            // This hits if created via obsolete method or data corruption
+            return res.status(500).json({ error: "Activation code is not linked to a valid restaurant entity" });
+        }
+
+        // 4. Perform Activation (Transaction)
         const result = await prisma.$transaction(async (tx) => {
+
+            // Double-check if restaurant is somehow already activated?
+            // (Optional strict check if we want to prevent re-activation of the same restaurant ID with a different code
+            //  if that was ever possible. But since codes are 1:1, this is implicitly handled).
+
             // Mark code as used
             await tx.activationCode.update({
                 where: { id: codeRecord.id },
                 data: { isUsed: true, usedAt: new Date() }
             });
 
-            // Calculate subscription end
-            const subscriptionEndsAt = new Date();
-            subscriptionEndsAt.setDate(subscriptionEndsAt.getDate() + codeRecord.durationDays);
+            // Update Restaurant status if needed
+            // Ensure strictly 1:1 relation setup if not already enforced by schema
+            const restaurant = codeRecord.restaurant;
 
-            let restaurant;
+            // Note: We don't need to 'link' here anymore, because it was linked at creation!
+            // We just return the restaurant.
 
-            // Check if restaurant with this name already exists
-            if (codeRecord.entityName) {
-                restaurant = await tx.restaurant.findFirst({
-                    where: { name: codeRecord.entityName }
-                });
-            }
-
-            if (!restaurant) {
-                throw new Error("Target restaurant entity not found. Please initialize the entity in the admin panel first.");
-            }
-
-            // If exists, return it (device will be linked to this restaurant)
             return restaurant;
         });
 
@@ -126,10 +149,6 @@ exports.activateDevice = async (req, res) => {
 
     } catch (error) {
         console.error("Activation Error:", error);
-        // Handle unique constraint violation (though isUsed check should catch it)
-        if (error.code === 'P2002') {
-            return res.status(409).json({ error: "Activation code already linked to a restaurant" });
-        }
         return res.status(500).json({ error: "Internal Server Error during activation" });
     }
 };

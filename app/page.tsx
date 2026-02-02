@@ -427,18 +427,18 @@ const RestaurantsView = ({ data, onSuspend, onNewRestaurant, onDelete }: Restaur
 interface KeysViewProps {
   keys: LicenseKey[];
   restaurants: Restaurant[];
-  onGenerate: (restaurantName: string) => void;
+  onGenerate: (restaurantId: string) => void;
   onDelete: (id: string) => void;
 }
 
 const KeysView = ({ keys, restaurants, onGenerate, onDelete }: KeysViewProps) => {
-  const [selectedRest, setSelectedRest] = useState(restaurants[0]?.name || '');
+  const [selectedRestId, setSelectedRestId] = useState(restaurants[0]?.id || '');
 
   useEffect(() => {
-    if (!selectedRest && restaurants.length > 0) {
-      setSelectedRest(restaurants[0].name);
+    if (!selectedRestId && restaurants.length > 0) {
+      setSelectedRestId(restaurants[0].id);
     }
-  }, [restaurants, selectedRest]);
+  }, [restaurants, selectedRestId]);
 
   return (
     <div className="space-y-8">
@@ -454,10 +454,10 @@ const KeysView = ({ keys, restaurants, onGenerate, onDelete }: KeysViewProps) =>
                 <div className="relative">
                   <select
                     className="w-full appearance-none bg-white border border-[#1F1F1F] px-4 py-3 text-sm font-serif focus:outline-none focus:ring-1 focus:ring-[#8D0B41]"
-                    value={selectedRest}
-                    onChange={(e) => setSelectedRest(e.target.value)}
+                    value={selectedRestId}
+                    onChange={(e) => setSelectedRestId(e.target.value)}
                   >
-                    {restaurants.map(r => <option key={r.id} value={r.name}>{r.name} ({r.id})</option>)}
+                    {restaurants.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                   </select>
                   <div className="absolute right-3 top-3.5 pointer-events-none text-[#1F1F1F]">
                     <ChevronRight size={14} className="rotate-90" />
@@ -477,7 +477,7 @@ const KeysView = ({ keys, restaurants, onGenerate, onDelete }: KeysViewProps) =>
                 </ul>
               </div>
 
-              <Button onClick={() => onGenerate(selectedRest)} className="w-full py-4 text-sm">Generate Key</Button>
+              <Button onClick={() => onGenerate(selectedRestId)} className="w-full py-4 text-sm">Generate Key</Button>
             </div>
           </Card>
         </div>
@@ -786,7 +786,7 @@ export default function DineStackAdmin() {
     }
   };
 
-  const handleGenerateKey = async (restaurantName: string) => {
+  const handleGenerateKey = async (restaurantId: string) => {
     try {
       const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
       const res = await fetch(`${API_BASE}/super-admin/activation-codes`, {
@@ -796,7 +796,7 @@ export default function DineStackAdmin() {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          entityName: restaurantName,
+          restaurantId,
           plan: "Standard",
           durationDays: 30,
           maxTables: 10
@@ -804,7 +804,7 @@ export default function DineStackAdmin() {
       });
 
       if (res.ok) {
-        addLog('KEY_GENERATE', restaurantName, 'Generated one-time activation key');
+        addLog('KEY_GENERATE', restaurantId, 'Generated activation key');
         fetchData(); // Refresh all data
       }
     } catch (err) {

@@ -22,18 +22,19 @@ enum RestaurantStatus {
 }
 
 model ActivationCode {
-  id           String   @id @default(uuid())
-  code         String   @unique
-  entityName   String?
+  id           String      @id @default(uuid())
+  code         String      @unique
+  entityName   String?     // Deprecated: kept for backward compatibility
   plan         String
   durationDays Int
   maxTables    Int
-  isUsed       Boolean  @default(false)
-  status       String   @default("ACTIVE") // ACTIVE, INVALIDATED
+  isUsed       Boolean     @default(false)
+  status       String      @default("ACTIVE") // ACTIVE, INVALIDATED
   expiresAt    DateTime
   usedAt       DateTime?
-  restaurant   Restaurant?
-  createdAt    DateTime @default(now())
+  restaurantId String?     @unique
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
+  createdAt    DateTime    @default(now())
 }
 
 model Restaurant {
@@ -42,23 +43,28 @@ model Restaurant {
   ownerEmail           String?
   status               RestaurantStatus @default(ACTIVE)
   isActive             Boolean          @default(true) // Deprecated, use status
+  isRegistered         Boolean          @default(false) // Legacy field
+  forceReactivation    Boolean          @default(false) // Legacy field
   subscriptionEndsAt   DateTime?
   revokedAt            DateTime?
   revokedBy            String?
   revocationReason     String?
   adminPin             String?
   kitchenPin           String?
-  activationCodeId     String?          @unique
-  activationCode       ActivationCode?  @relation(fields: [activationCodeId], references: [id], onDelete: SetNull)
+  activationCodeId     String?          @unique // Legacy FK - kept for backward compatibility
+  activationCode       ActivationCode?
   createdAt            DateTime         @default(now())
   devices              Device[]
 }
 
 model Device {
   id           String     @id @default(uuid())
+  deviceId     String?    @unique  // Legacy device identifier
   type         String     @default("UNKNOWN")
+  role         String?    // Legacy role field
   status       String     @default("ACTIVE")
   lastSeen     DateTime   @default(now())
+  lastUsed     DateTime?  // Legacy field
   restaurantId String
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
   createdAt    DateTime   @default(now())
