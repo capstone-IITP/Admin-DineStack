@@ -28,7 +28,7 @@ model ActivationCode {
   plan         String
   durationDays Int
   maxTables    Int
-  isUsed       Boolean     @default(false)
+  isUsed       Boolean?    @default(false)
   status       String      @default("ACTIVE") // ACTIVE, INVALIDATED
   expiresAt    DateTime
   usedAt       DateTime?
@@ -42,9 +42,9 @@ model Restaurant {
   name                 String
   ownerEmail           String?
   status               RestaurantStatus @default(ACTIVE)
-  isActive             Boolean          @default(true) // Deprecated, use status
-  isRegistered         Boolean          @default(false) // Legacy field
-  forceReactivation    Boolean          @default(false) // Legacy field
+  isActive             Boolean?         @default(true) // Deprecated, use status
+  isRegistered         Boolean?         @default(false) // Legacy field
+  forceReactivation    Boolean?         @default(false) // Legacy field
   subscriptionEndsAt   DateTime?
   revokedAt            DateTime?
   revokedBy            String?

@@ -97,6 +97,12 @@ app.use("/super-admin", authRoutes); // Auth (Login)
 app.use("/super-admin/dashboard", dashboardRoutes); // Dashboard Stats
 app.use("/super-admin/activation-codes", activationRoutes); // Code Management
 
+// New Super Admin Access Management Routes
+// Implements implementation level plan for /api/super-admin/* endpoints
+const superAdminRoutes = require("./dashboard/superAdmin.routes");
+app.use("/api/super-admin", superAdminRoutes);
+
+
 // -----------------------------------------------------------------------------
 // DEVICE ROUTES (Restaurant Tablet)
 // -----------------------------------------------------------------------------
