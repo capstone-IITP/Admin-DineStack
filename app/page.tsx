@@ -680,6 +680,7 @@ export default function DineStackAdmin() {
   const [restaurantToDelete, setRestaurantToDelete] = useState<string | null>(null);
   const [suspendModalOpen, setSuspendModalOpen] = useState(false);
   const [restaurantToSuspend, setRestaurantToSuspend] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch data on load
   const fetchData = async () => {
@@ -694,6 +695,18 @@ export default function DineStackAdmin() {
 
     try {
       setIsLoading(true); // Show loading state on refresh
+      setError(null);
+
+      // Ping check
+      const pingRes = await fetch(`${baseUrl}/ping`, { headers, cache: 'no-store' });
+      if (!pingRes.ok) {
+        if (pingRes.status === 401) {
+          router.push('/login');
+          return;
+        }
+        throw new Error(`Backend ping failed: ${pingRes.status}`);
+      }
+
       const [statsRes, restRes, keysRes, devicesRes, logsRes] = await Promise.all([
         fetch(`${baseUrl}/stats`, { headers, cache: 'no-store' }),
         fetch(`${baseUrl}/restaurants`, { headers, cache: 'no-store' }),
@@ -711,8 +724,9 @@ export default function DineStackAdmin() {
         // Ensure dates are formatted as expected
         setLogs(logsData);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch dashboard data:", error);
+      setError(error.message || "Failed to load dashboard data");
     } finally {
       setIsLoading(false);
     }
@@ -733,6 +747,26 @@ export default function DineStackAdmin() {
       <div className="min-h-screen bg-[#FFFFF0] flex items-center justify-center">
         <div className="font-mono text-xs uppercase tracking-widest text-[#8D0B41] animate-pulse">
           Authenticating Secure Link...
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#FFFFF0] flex items-center justify-center p-6">
+        <div className="bg-white border-2 border-[#1F1F1F] p-8 max-w-md w-full shadow-[8px_8px_0px_0px_#8D0B41]">
+          <div className="flex items-center gap-4 text-[#8D0B41] mb-4">
+            <AlertTriangle size={32} />
+            <h2 className="font-serif text-xl font-bold text-[#1F1F1F]">Connection Failure</h2>
+          </div>
+          <p className="font-mono text-xs text-[#6A6A6A] mb-6">
+            {error}
+          </p>
+          <div className="p-4 bg-gray-50 border border-gray-200 mb-6 font-mono text-[10px] text-gray-500 break-all">
+            ENDPOINT: {`${API_BASE}/super-admin/dashboard/ping`}
+          </div>
+          <Button onClick={fetchData} className="w-full">Retry Connection</Button>
         </div>
       </div>
     );

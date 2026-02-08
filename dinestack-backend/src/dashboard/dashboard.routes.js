@@ -7,13 +7,15 @@ const {
     getDevices,
     getLogs,
     createRestaurant,
-    deleteRestaurant
+    deleteRestaurant,
+    ping
 } = require("./dashboard.controller");
 
 const router = express.Router();
 
 router.use(requireSuperAdmin);
 
+router.get("/ping", ping);
 router.get("/stats", getDashboardStats);
 router.get("/restaurants", getRestaurants);
 router.post("/restaurants", createRestaurant);

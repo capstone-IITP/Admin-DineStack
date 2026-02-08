@@ -245,6 +245,10 @@ const updateRestaurantStatus = async (req, res) => {
     }
 };
 
+const ping = async (req, res) => {
+    res.json({ message: "Pong", timestamp: new Date() });
+};
+
 module.exports = {
     getDashboardStats,
     getRestaurants,
@@ -253,5 +257,6 @@ module.exports = {
     getLogs,
     createRestaurant,
     deleteRestaurant,
-    updateRestaurantStatus
+    updateRestaurantStatus,
+    ping
 };
