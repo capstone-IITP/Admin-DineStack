@@ -3,11 +3,11 @@
     "rewrites": [
         {
             "source": "/super-admin/:path*",
-            "destination": "/api/super-admin/:path*"
+            "destination": "/api"
         },
         {
             "source": "/health",
-            "destination": "/api/health"
+            "destination": "/api"
         }
     ]
 }
