@@ -77,10 +77,11 @@ export default function AuthGuard({ children }: AuthGuardProps) {
                 setIsAuthenticated(true);
             }
         } catch (error) {
-            // Server unreachable
+            // Server unreachable - do NOT logout, just log error
             console.error('[AuthGuard] Server unreachable:', error);
-            // Clear session and redirect to login when server is down
-            clearSessionAndRedirect();
+            // Allow access if we have a token but server is down (optimistic)
+            // Or show a connection error toast (future improvement)
+            setIsAuthenticated(true);
             return;
         } finally {
             setIsValidating(false);

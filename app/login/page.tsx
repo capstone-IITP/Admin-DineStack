@@ -44,8 +44,8 @@ export default function LoginPage() {
             }
 
             // Store auth data
-            sessionStorage.setItem("SUPER_ADMIN_TOKEN", data.token);
-            sessionStorage.setItem("admin", JSON.stringify(data.admin));
+            localStorage.setItem("SUPER_ADMIN_TOKEN", data.token);
+            localStorage.setItem("admin", JSON.stringify(data.admin));
 
             // Redirect to dashboard
             router.push("/");
