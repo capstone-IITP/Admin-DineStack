@@ -1,179 +1,87 @@
-import { auth, clerkClient } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
-import { CheckCircle2, ShieldCheck, AlertTriangle, Loader2 } from "lucide-react";
-import { SignIn } from "@clerk/nextjs";
+'use client';
 
-export default async function SetupPage() {
-    const { userId, sessionClaims } = await auth();
+import { useSession, useUser } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { claimSuperAdmin } from "./actions";
+import { Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
 
-    // 1. If not logged in, go to sign-in
-    if (!userId) {
-        redirect('/sign-in');
-    }
+export default function SetupPageClient() {
+    const { isLoaded, session, isSignedIn } = useSession();
+    const { user } = useUser();
+    const router = useRouter();
+    const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+    const [msg, setMsg] = useState('');
 
-    let status = 'loading';
-    let errorMessage = '';
+    useEffect(() => {
+        if (!isLoaded) return;
 
-    try {
-        // 2. Check if already has role (Backend Check)
-        const client = await clerkClient();
-
-        // Wrap API calls to catch configuration errors (e.g., missing API keys)
-        let user;
-        try {
-            user = await client.users.getUser(userId);
-        } catch (e: any) {
-            console.error("Clerk getUser failed:", e);
-            throw new Error(`Failed to fetch user data: ${e.message}`);
+        if (!isSignedIn) {
+            router.push('/sign-in');
+            return;
         }
 
-        const existingRole = (user.privateMetadata as any)?.role;
+        const initSetup = async () => {
+            // Check if we already have the role in the session (fast path)
+            // We need to check publicMetadata or privateMetadata (not accessible in client usually unless publicly mapped)
+            // But simpler: just run the server action. It checks backend truth.
 
-        if (existingRole === 'super_admin') {
-            status = 'needs_relogin';
-        } else {
-            // 3. System Check: Is this the first user?
-            const userList = await client.users.getUserList({ limit: 2 });
-            const isFirstUser = userList.totalCount === 1;
+            try {
+                const result = await claimSuperAdmin();
 
-            if (isFirstUser) {
-                try {
-                    await client.users.updateUserMetadata(userId, {
-                        privateMetadata: {
-                            role: 'super_admin'
-                        }
-                    });
-                    status = 'success';
-                } catch (error: any) {
-                    console.error("Failed to assign role:", error);
-                    status = 'error';
-                    errorMessage = error.message || "Failed to update user metadata";
+                if (result.success) {
+                    setStatus('success');
+                    // CRITICAL: Reload session to convert backend metadata update into a new JWT
+                    await session.reload();
+                    // Now redirect
+                    router.push('/');
+                } else {
+                    setStatus('error');
+                    setMsg(result.message);
                 }
-            } else {
-                status = 'lockdown';
+            } catch (err: any) {
+                setStatus('error');
+                setMsg(err.message || 'Unknown error');
             }
-        }
-    } catch (error: any) {
-        console.error("Setup page error:", error);
-        status = 'error';
-        errorMessage = error.message || "An unexpected error occurred during setup.";
-    }
+        };
 
-    // --- UI RENDER LOGIC ---
+        // If usage has the role already, just go home
+        // But session might be stale, so let's just run logic.
+        // Optimization: check if user.publicMetadata.role === 'super_admin' if we exposed it. 
+        // For now, robust path: always claim.
+        initSetup();
 
-    const Container = ({ children }: { children: React.ReactNode }) => (
-        <div className="min-h-screen bg-[#FFFFF0] flex flex-col items-center justify-center p-4">
-            <div className="text-center animate-in fade-in zoom-in duration-500 bg-white p-8 rounded-2xl shadow-xl max-w-lg w-full">
-                {children}
-            </div>
-        </div>
-    );
-
-    if (status === 'needs_relogin') {
-        return (
-            <Container>
-                <div className="flex justify-center mb-6">
-                    <div className="w-20 h-20 bg-blue-600 flex items-center justify-center rounded-full shadow-lg">
-                        <ShieldCheck className="text-white" size={40} />
-                    </div>
-                </div>
-                <h1 className="text-3xl font-serif font-bold text-[#1F1F1F] mb-4">
-                    Activation Pending
-                </h1>
-                <p className="text-[#6A6A6A] mb-8">
-                    Your account has the <strong>Super Admin</strong> role, but your session needs to be updated.
-                    <br /><br />
-                    Please <strong>Sign Out</strong> and log back in to access the dashboard.
-                </p>
-                <div className="flex justify-center">
-                    <a href="/sign-in" className="px-6 py-3 bg-[#1F1F1F] text-white font-mono text-xs uppercase tracking-widest hover:bg-[#333] rounded">
-                        Return to Sign In
-                    </a>
-                </div>
-            </Container>
-        );
-    }
-
-    if (status === 'success') {
-        return (
-            <Container>
-                <div className="flex justify-center mb-6">
-                    <div className="w-20 h-20 bg-green-600 flex items-center justify-center rounded-full shadow-lg">
-                        <CheckCircle2 className="text-white" size={40} />
-                    </div>
-                </div>
-                <h1 className="text-3xl font-serif font-bold text-[#1F1F1F] mb-4">
-                    Owner Account Claimed
-                </h1>
-                <p className="text-[#6A6A6A] mb-8">
-                    You have been successfully registered as the <strong>Super Admin</strong>.
-                    <br />
-                    Important: You must <strong>Sign Out</strong> and log in again to activate your privileges.
-                </p>
-                <a href="/sign-in" className="px-6 py-3 bg-[#1F1F1F] text-white font-mono text-xs uppercase tracking-widest hover:bg-[#333] rounded">
-                    Go to Sign In
-                </a>
-            </Container>
-        );
-    }
-
-    if (status === 'lockdown') {
-        return (
-            <Container>
-                <div className="flex justify-center mb-6">
-                    <div className="w-20 h-20 bg-[#8D0B41] flex items-center justify-center rounded-full shadow-lg">
-                        <ShieldCheck className="text-white" size={40} />
-                    </div>
-                </div>
-                <h1 className="text-3xl font-serif font-bold text-[#8D0B41] mb-4">
-                    Setup Locked
-                </h1>
-                <p className="text-[#6A6A6A] mb-8">
-                    The Super Admin account has already been claimed.
-                    Public signup is strictly disabled.
-                </p>
-                <a href="/access-denied" className="px-6 py-3 bg-gray-200 text-[#1F1F1F] font-mono text-xs uppercase tracking-widest hover:bg-gray-300 rounded">
-                    Back
-                </a>
-            </Container>
-        );
-    }
+    }, [isLoaded, isSignedIn, router, session]);
 
     if (status === 'error') {
         return (
-            <Container>
-                <div className="flex justify-center mb-6">
-                    <div className="w-20 h-20 bg-red-600 flex items-center justify-center rounded-full shadow-lg">
-                        <AlertTriangle className="text-white" size={40} />
+            <div className="min-h-screen bg-[#FFFFF0] flex flex-col items-center justify-center p-4">
+                <div className="bg-white p-8 rounded-2xl shadow-xl max-w-lg w-full text-center">
+                    <div className="flex justify-center mb-6">
+                        <div className="w-16 h-16 bg-red-100 flex items-center justify-center rounded-full">
+                            <AlertTriangle className="text-red-600" size={32} />
+                        </div>
+                    </div>
+                    <h1 className="text-2xl font-bold text-red-600 mb-2">Setup Failed</h1>
+                    <p className="text-gray-600 mb-6">{msg}</p>
+                    <button onClick={() => window.location.reload()} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 text-sm font-bold uppercase tracking-wide">
+                        Retry
+                    </button>
+                    <div className="mt-4">
+                        <a href="/sign-in" className="text-xs text-gray-400 underline">Back to Sign In</a>
                     </div>
                 </div>
-                <h1 className="text-3xl font-serif font-bold text-red-600 mb-4">
-                    Setup Failed
-                </h1>
-                <p className="text-[#6A6A6A] mb-6">
-                    We encountered an error while setting up your account.
-                </p>
-                <div className="bg-red-50 p-4 rounded text-left mb-6 overflow-auto max-h-40">
-                    <p className="font-mono text-xs text-red-800 break-all">
-                        {errorMessage}
-                    </p>
-                </div>
-                <p className="text-xs text-gray-500 mb-6">
-                    Check your Clerk Secret Key and API Keys in your environment variables.
-                </p>
-                <a href="/setup" className="px-6 py-3 bg-[#1F1F1F] text-white font-mono text-xs uppercase tracking-widest hover:bg-[#333] rounded">
-                    Retry
-                </a>
-            </Container>
+            </div>
         );
     }
 
     return (
         <div className="min-h-screen bg-[#FFFFF0] flex flex-col items-center justify-center p-4">
             <div className="flex flex-col items-center animate-pulse">
-                <Loader2 className="w-10 h-10 text-[#8D0B41] animate-spin mb-4" />
-                <p className="font-mono text-xs uppercase tracking-widest text-[#1F1F1F]">
-                    Initializing System...
+                <Loader2 className="w-12 h-12 text-[#8D0B41] animate-spin mb-4" />
+                <h2 className="text-xl font-serif font-bold text-[#1F1F1F]">Setting Update</h2>
+                <p className="font-mono text-xs uppercase tracking-widest text-gray-500 mt-2">
+                    {status === 'success' ? 'Redirecting to Dashboard...' : 'Configuring Admin Permissions...'}
                 </p>
             </div>
         </div>
