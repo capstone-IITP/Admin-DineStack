@@ -1,15 +1,16 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-// Define protected routes
 const isProtectedRoute = createRouteMatcher([
     '/',             // Dashboard
-    '/((?!sign-in).*)' // Protect everything except sign-in
+    '/setup',        // Allow setup to be accessed (logic inside handles redirection)
+    '/((?!sign-in|access-denied).*)' // Protect everything except sign-in and access-denied
 ]);
 
 const isPublicRoute = createRouteMatcher([
     '/sign-in(.*)',
-    '/api/uploadthing(.*)' // If you use uploadthing or other public webhooks
+    '/access-denied',
+    '/api/uploadthing(.*)' // If you use uploadthing or public webhooks
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
@@ -22,20 +23,32 @@ export default clerkMiddleware(async (auth, req) => {
         return redirectToSignIn();
     }
 
-    // 2. Access Control Logic
-    // Check metadata for role ONLY
-    const role = (sessionClaims as any)?.metadata?.role || (sessionClaims as any)?.role;
+    // 2. Identify Role
+    // We check `publicMetadata` (accessible as `metadata` in sessionClaims usually, depending on JWT template)
+    // IMPORTANT: Ensure Clerk JWT template includes `public_metadata` as `metadata` or `public_metadata`
+    const role = (sessionClaims as any)?.metadata?.role || (sessionClaims as any)?.public_metadata?.role;
 
-    // Strict Role Check: Must be 'super_admin'
-    const isSuperAdmin = role === 'super_admin';
-
-    // If user is logged in but NOT authorized
-    if (!isSuperAdmin) {
-        console.warn(`[Middleware] Unauthorized access attempt: ${userId} (Role: ${role})`);
-        return new NextResponse('Access Denied: Super Admin privileges required.', { status: 403 });
+    // 3. Special Case: Setup Route
+    // We allow authenticated users to access /setup to claim ownership if needed
+    if (req.nextUrl.pathname === '/setup') {
+        return;
     }
 
-    // Allow access
+    // 4. Strict Role Check: Must be 'super_admin'
+    if (role !== 'super_admin') {
+        // If user has NO role, maybe they need to setup?
+        // Redirect to /setup to check if they can claim ownership
+        if (!role) {
+            const url = new URL('/setup', req.url);
+            return NextResponse.redirect(url);
+        }
+
+        // If they HAVE a role but it's not super_admin (or just rejected), deny.
+        const url = new URL('/access-denied', req.url);
+        return NextResponse.redirect(url);
+    }
+
+    // Allow access to protected routes if super_admin
 });
 
 export const config = {
