@@ -1,7 +1,15 @@
 const express = require("express");
 require("dotenv").config();
 
-const authRoutes = require("./auth/auth.routes");
+// DEBUG: Check if Clerk keys are loaded
+if (!process.env.CLERK_SECRET_KEY) {
+    console.error("❌ CRITICAL: CLERK_SECRET_KEY is missing from process.env");
+} else {
+    console.log("✅ CLERK_SECRET_KEY loaded:", process.env.CLERK_SECRET_KEY.substring(0, 10) + "...");
+}
+
+
+// const authRoutes = require("./auth/auth.routes");
 const dashboardRoutes = require("./dashboard/dashboard.routes");
 const activationRoutes = require("./activation/activation.routes");
 const deviceRoutes = require("./activation/device.routes");
@@ -93,12 +101,12 @@ app.get("/api/health", (req, res) => {
 // -----------------------------------------------------------------------------
 // SUPER ADMIN ROUTES (Management Portal)
 // -----------------------------------------------------------------------------
-app.use("/super-admin", authRoutes); // Auth (Login)
+// app.use("/super-admin", authRoutes); // Auth (Login) - REMOVED for Clerk
 app.use("/super-admin/dashboard", dashboardRoutes); // Dashboard Stats
 app.use("/super-admin/activation-codes", activationRoutes); // Code Management
 
 // Support /api/super-admin prefix for Vercel rewrites
-app.use("/api/super-admin", authRoutes);
+// app.use("/api/super-admin", authRoutes); - REMOVED for Clerk
 app.use("/api/super-admin/dashboard", dashboardRoutes);
 app.use("/api/super-admin/activation-codes", activationRoutes);
 
