@@ -23,6 +23,7 @@ export default function Page() {
             {/* Clerk Component Wrapper */}
             <div className="w-full max-w-md">
                 <SignIn
+                    signUpUrl="/"
                     appearance={{
                         elements: {
                             footer: "hidden",

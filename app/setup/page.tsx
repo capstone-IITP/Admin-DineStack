@@ -1,6 +1,7 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { CheckCircle2, ShieldCheck, Loader2 } from "lucide-react";
+import { CheckCircle2, ShieldCheck } from "lucide-react";
+import { SignIn } from "@clerk/nextjs";
 
 export default async function SetupPage() {
     const { userId, sessionClaims } = await auth();
@@ -10,21 +11,47 @@ export default async function SetupPage() {
         redirect('/sign-in');
     }
 
-    // 2. Check if already has role
-    const currentRole = (sessionClaims?.metadata as any)?.role;
-    if (currentRole === 'super_admin') {
-        redirect('/');
+    // 2. Check if already has role (Backend Check is most reliable here)
+    // We check via Clerk Client to see the REAL state, ignoring potentially stale session token
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    const existingRole = (user.privateMetadata as any)?.role;
+
+    if (existingRole === 'super_admin') {
+        // If backend says we are admin, but we are here, it means Middleware sent us here 
+        // because the Session Token is stale (doesn't have the role yet).
+        // WE MUST ASK USER TO RE-LOGIN.
+        return (
+            <div className="min-h-screen bg-[#FFFFF0] flex flex-col items-center justify-center p-4">
+                <div className="text-center animate-in fade-in zoom-in duration-500">
+                    <div className="flex justify-center mb-6">
+                        <div className="w-20 h-20 bg-blue-600 flex items-center justify-center rounded-full shadow-lg">
+                            <ShieldCheck className="text-white" size={40} />
+                        </div>
+                    </div>
+                    <h1 className="text-3xl font-serif font-bold text-[#1F1F1F] mb-4">
+                        Activation Pending
+                    </h1>
+                    <p className="text-[#6A6A6A] max-w-md mx-auto mb-8">
+                        Your account has the <strong>Super Admin</strong> role, but your session needs to be updated.
+                        <br /><br />
+                        Please <strong>Sign Out</strong> and log back in to access the dashboard.
+                    </p>
+                    <div className="flex justify-center">
+                        <div className="hidden">
+                            <SignIn />
+                        </div>
+                        <a href="/sign-in" className="px-6 py-3 bg-[#1F1F1F] text-white font-mono text-xs uppercase tracking-widest hover:bg-[#333]">
+                            Return to Sign In
+                        </a>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     // 3. System Check: Is this the first user?
-    const client = await clerkClient();
     const userList = await client.users.getUserList({ limit: 2 });
-
-    // If there is exactly 1 user (current user), or if we are just setting up
-    // Note: If limit is 2 and we get 1, we are good.
-    // If we get 2, we need to check if we are allowed.
-    // STRICT RULE: Only allow if total count is 1.
-
     const isFirstUser = userList.totalCount === 1;
 
     let status = 'denied';
@@ -32,7 +59,7 @@ export default async function SetupPage() {
     if (isFirstUser) {
         try {
             await client.users.updateUserMetadata(userId, {
-                publicMetadata: {
+                privateMetadata: {
                     role: 'super_admin'
                 }
             });
@@ -42,20 +69,10 @@ export default async function SetupPage() {
             status = 'error';
         }
     } else {
-        // If more than 1 user exists, strict lockdown.
-        // But maybe the owner never set "role" metadata? 
-        // We assume the prompt "Allow signup temporarily to create the initial owner account" 
-        // means the *very first* user is the owner.
         status = 'lockdown';
     }
 
     if (status === 'success') {
-        // Force token refresh by signing out or just redirecting?
-        // Redirecting might not update the token immediately. 
-        // Ideally user should re-login or we wait. 
-        // For now, let's redirect to home, middleware might block if token is stale.
-        // We will show a success message asking to refresh/re-login.
-
         return (
             <div className="min-h-screen bg-[#FFFFF0] flex flex-col items-center justify-center p-4">
                 <div className="text-center animate-in fade-in zoom-in duration-500">
@@ -70,10 +87,10 @@ export default async function SetupPage() {
                     <p className="text-[#6A6A6A] max-w-md mx-auto mb-8">
                         You have been successfully registered as the <strong>Super Admin</strong>.
                         <br />
-                        Please return to the dashboard.
+                        Important: You must <strong>Sign Out</strong> and log in again to activate your privileges.
                     </p>
-                    <a href="/" className="px-6 py-3 bg-[#1F1F1F] text-white font-mono text-xs uppercase tracking-widest hover:bg-[#333]">
-                        Go to Dashboard
+                    <a href="/sign-in" className="px-6 py-3 bg-[#1F1F1F] text-white font-mono text-xs uppercase tracking-widest hover:bg-[#333]">
+                        Go to Sign In
                     </a>
                 </div>
             </div>
