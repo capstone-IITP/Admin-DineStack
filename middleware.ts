@@ -9,6 +9,7 @@ const isProtectedRoute = createRouteMatcher([
 
 const isPublicRoute = createRouteMatcher([
     '/sign-in(.*)',
+    '/sign-up(.*)',
     '/access-denied',
     '/api/uploadthing(.*)' // If you use uploadthing or public webhooks
 ]);
