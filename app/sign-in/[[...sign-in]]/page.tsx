@@ -25,7 +25,9 @@ export default function Page() {
                 <SignIn
                     appearance={{
                         elements: {
-                            footer: "hidden"
+                            footer: "hidden",
+                            footerAction: "hidden",
+                            footerActionLink: "hidden"
                         }
                     }}
                 />
