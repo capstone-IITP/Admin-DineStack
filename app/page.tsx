@@ -684,7 +684,7 @@ export default function DineStackAdmin() {
 
   // Fetch data on load
   const fetchData = async () => {
-    const token = sessionStorage.getItem('SUPER_ADMIN_TOKEN');
+    const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
     if (!token) {
       router.push('/login');
       return;
@@ -737,8 +737,8 @@ export default function DineStackAdmin() {
   }, [router]);
 
   const handleLogout = () => {
-    sessionStorage.removeItem('SUPER_ADMIN_TOKEN');
-    sessionStorage.removeItem('admin');
+    localStorage.removeItem('SUPER_ADMIN_TOKEN');
+    localStorage.removeItem('admin');
     router.push('/login');
   };
 
@@ -789,7 +789,7 @@ export default function DineStackAdmin() {
   const handleNewRestaurant = async (name: string) => {
     if (!name) return;
     try {
-      const token = sessionStorage.getItem('SUPER_ADMIN_TOKEN');
+      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
       console.log('[DEBUG] Creating restaurant with token:', token ? `${token.substring(0, 20)}...` : 'MISSING');
       const res = await fetch(`${API_BASE}/super-admin/dashboard/restaurants`, {
         method: 'POST',
@@ -822,7 +822,7 @@ export default function DineStackAdmin() {
 
   const handleGenerateKey = async (restaurantId: string) => {
     try {
-      const token = sessionStorage.getItem('SUPER_ADMIN_TOKEN');
+      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
       const res = await fetch(`${API_BASE}/super-admin/activation-codes`, {
         method: 'POST',
         headers: {
@@ -857,7 +857,7 @@ export default function DineStackAdmin() {
     if (!keyToDelete) return;
 
     try {
-      const token = sessionStorage.getItem('SUPER_ADMIN_TOKEN');
+      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
       const res = await fetch(`${API_BASE}/super-admin/activation-codes/${keyToDelete}`, {
         method: 'DELETE',
         headers: {
@@ -886,7 +886,7 @@ export default function DineStackAdmin() {
     if (!restaurantToDelete) return;
 
     try {
-      const token = sessionStorage.getItem('SUPER_ADMIN_TOKEN');
+      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
       const res = await fetch(`${API_BASE}/super-admin/dashboard/restaurants/${restaurantToDelete}`, {
         method: 'DELETE',
         headers: {
@@ -920,7 +920,7 @@ export default function DineStackAdmin() {
     const newStatus = (currentStatus === 'Suspended' || currentStatus === 'SUSPENDED') ? 'ACTIVE' : 'SUSPENDED';
 
     try {
-      const token = sessionStorage.getItem('SUPER_ADMIN_TOKEN');
+      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
       const res = await fetch(`${API_BASE}/super-admin/dashboard/restaurants/${restaurantToSuspend}/status`, {
         method: 'PATCH',
         headers: {
