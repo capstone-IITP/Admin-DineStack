@@ -796,7 +796,6 @@ export default function DineStackAdmin() {
     if (!name) return;
     try {
       const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
-      console.log('[DEBUG] Creating restaurant with token:', token ? `${token.substring(0, 20)}...` : 'MISSING');
       const res = await fetch(`${API_BASE}/super-admin/dashboard/restaurants`, {
         method: 'POST',
         headers: {
@@ -813,6 +812,11 @@ export default function DineStackAdmin() {
         return;
       }
 
+      if (res.status === 409) {
+        alert(`Entity already exists: ${parsed.data?.message || 'A restaurant with this name already exists. Use the existing entity instead.'}`);
+        return;
+      }
+
       if (res.ok) {
         const newRest: Restaurant = parsed.data;
         addLog('ENTITY_CREATE', newRest.id, `Created entity ${name}`);
@@ -822,7 +826,7 @@ export default function DineStackAdmin() {
       }
     } catch (err: any) {
       console.error("Failed to create restaurant:", err);
-      alert(`Failed to create restaurant: ${err.message || 'Network error or invalid response. Check console for details.'}`);
+      alert(`Failed to create restaurant: ${err.message || 'Network error or invalid response.'}`);
     }
   };
 
@@ -846,9 +850,20 @@ export default function DineStackAdmin() {
       if (res.ok) {
         addLog('KEY_GENERATE', restaurantId, 'Generated activation key');
         fetchData(); // Refresh all data
+      } else {
+        const parsed = await safeJsonParse(res);
+        if (res.status === 409) {
+          alert(`Key already exists: ${parsed.data?.message || 'This restaurant already has an active, unused activation code.'}`);
+          if (parsed.data?.code) {
+            alert(`Existing code: ${parsed.data.code}`);
+          }
+        } else {
+          alert(`Failed to generate key: ${parsed.data?.message || 'Unknown error'}`);
+        }
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("Failed to generate key:", err);
+      alert(`Failed to generate key: ${err.message || 'Network error'}`);
     }
   };
 

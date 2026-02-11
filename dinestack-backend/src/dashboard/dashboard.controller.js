@@ -150,6 +150,14 @@ const createRestaurant = async (req, res) => {
         const { name } = req.body;
         if (!name) return res.status(400).json({ message: "Name is required" });
 
+        // Prevent duplicate entity names
+        const existing = await prisma.restaurant.findUnique({ where: { name } });
+        if (existing) {
+            return res.status(409).json({
+                message: `Entity with name "${name}" already exists (ID: ${existing.id}). Use the existing entity instead.`
+            });
+        }
+
         const restaurant = await prisma.restaurant.create({
             data: {
                 name,
@@ -167,6 +175,10 @@ const createRestaurant = async (req, res) => {
         });
     } catch (error) {
         console.error("Error creating restaurant:", error);
+        // Handle unique constraint violation from DB level as well
+        if (error.code === 'P2002') {
+            return res.status(409).json({ message: "An entity with this name already exists" });
+        }
         res.status(500).json({ message: error.message });
     }
 };
@@ -231,20 +243,17 @@ const updateRestaurantStatus = async (req, res) => {
                 updateData.revokedBy = revokedBy || "Super Admin";
                 updateData.revocationReason = reason;
 
-                // Invalidate Activation Codes associated with this restaurant
-                const restaurant = await tx.restaurant.findUnique({ where: { id } });
-                if (restaurant) {
-                    await tx.activationCode.updateMany({
-                        where: {
-                            entityName: restaurant.name,
-                            isUsed: false,
-                            status: 'ACTIVE'
-                        },
-                        data: {
-                            status: 'INVALIDATED'
-                        }
-                    });
-                }
+                // Invalidate Activation Codes associated with this restaurant (use FK, not name)
+                await tx.activationCode.updateMany({
+                    where: {
+                        restaurantId: id,
+                        isUsed: false,
+                        status: 'ACTIVE'
+                    },
+                    data: {
+                        status: 'INVALIDATED'
+                    }
+                });
             } else {
                 // Reactivation
                 updateData.revokedAt = null;

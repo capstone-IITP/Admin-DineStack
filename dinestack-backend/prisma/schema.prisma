@@ -39,7 +39,7 @@ model ActivationCode {
 
 model Restaurant {
   id                   String           @id @default(uuid())
-  name                 String
+  name                 String           @unique
   ownerEmail           String?
   status               RestaurantStatus @default(ACTIVE)
   isActive             Boolean?         @default(true) // Deprecated, use status

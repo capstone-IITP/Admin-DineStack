@@ -108,21 +108,22 @@ exports.activateDevice = async (req, res) => {
             return res.status(401).json({ error: "Activation code has been invalidated" });
         }
 
-        // 3. Strict 1-to-1 Activation Check
-        // If restaurant is ALREADY active via another code (shouldn't happen with unique check, but safe double-check)
-        // OR deeply check if restaurant has ANY used code? 
-        // Logic: One Restaurant = One Active License.
+        // 3. Verify restaurant linkage (must exist from license generation)
         if (!codeRecord.restaurant) {
-            // This hits if created via obsolete method or data corruption
             return res.status(500).json({ error: "Activation code is not linked to a valid restaurant entity" });
         }
 
-        // 4. Perform Activation (Transaction)
-        const result = await prisma.$transaction(async (tx) => {
+        // 4. Verify restaurant is in an activatable state
+        if (codeRecord.restaurant.status === 'REVOKED') {
+            return res.status(403).json({ error: "Restaurant access has been revoked. Contact administrator." });
+        }
 
-            // Double-check if restaurant is somehow already activated?
-            // (Optional strict check if we want to prevent re-activation of the same restaurant ID with a different code
-            //  if that was ever possible. But since codes are 1:1, this is implicitly handled).
+        if (codeRecord.restaurant.status === 'SUSPENDED') {
+            return res.status(403).json({ error: "Restaurant is currently suspended. Contact administrator." });
+        }
+
+        // 5. Perform Activation (Transaction) — NO new entity creation!
+        const result = await prisma.$transaction(async (tx) => {
 
             // Mark code as used
             await tx.activationCode.update({
@@ -130,17 +131,40 @@ exports.activateDevice = async (req, res) => {
                 data: { isUsed: true, usedAt: new Date() }
             });
 
-            // Update Restaurant status if needed
-            // Ensure strictly 1:1 relation setup if not already enforced by schema
-            const restaurant = codeRecord.restaurant;
+            // Calculate and set subscription end date
+            const subscriptionEndsAt = new Date();
+            subscriptionEndsAt.setDate(subscriptionEndsAt.getDate() + codeRecord.durationDays);
 
-            // Note: We don't need to 'link' here anymore, because it was linked at creation!
-            // We just return the restaurant.
+            // Update existing restaurant (NOT creating a new one)
+            const restaurant = await tx.restaurant.update({
+                where: { id: codeRecord.restaurant.id },
+                data: {
+                    status: 'ACTIVE',
+                    isActive: true,
+                    subscriptionEndsAt
+                }
+            });
+
+            // Audit log
+            await tx.auditLog.create({
+                data: {
+                    action: 'DEVICE_ACTIVATED',
+                    user: 'DEVICE',
+                    target: `Restaurant:${restaurant.id}`,
+                    details: JSON.stringify({
+                        activationCode: codeRecord.code,
+                        plan: codeRecord.plan,
+                        durationDays: codeRecord.durationDays,
+                        maxTables: codeRecord.maxTables,
+                        subscriptionEndsAt: subscriptionEndsAt.toISOString()
+                    })
+                }
+            });
 
             return restaurant;
         });
 
-        // 5. Success
+        // 6. Success — return EXISTING restaurant, never a duplicate
         return res.json({
             success: true,
             restaurant: result,
