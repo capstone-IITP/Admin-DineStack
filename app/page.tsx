@@ -45,6 +45,7 @@ interface LicenseKey {
   id: string;
   code: string;
   restaurant: string;
+  entityId?: string | null;
   status: string;
   created: string;
   boundTo: string | null;
@@ -485,31 +486,36 @@ const KeysView = ({ keys, restaurants, onGenerate, onDelete }: KeysViewProps) =>
         {/* List Panel */}
         <div className="col-span-8">
           <Card title="Generation Log" noPadding>
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 border-b border-[#1F1F1F]">
-                <tr>
-                  <th className="px-6 py-3 font-mono font-normal text-[#6A6A6A] text-[10px] uppercase tracking-widest">Token</th>
-                  <th className="px-6 py-3 font-mono font-normal text-[#6A6A6A] text-[10px] uppercase tracking-widest">Entity</th>
-                  <th className="px-6 py-3 font-mono font-normal text-[#6A6A6A] text-[10px] uppercase tracking-widest">Bind Hash</th>
-                  <th className="px-6 py-3 font-mono font-normal text-[#6A6A6A] text-[10px] uppercase tracking-widest text-right">State</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {keys.map((k, idx) => (
-                  <tr key={idx} className="hover:bg-[#FFFFF0]">
-                    <td className="px-6 py-4 font-mono text-[#1F1F1F] text-xs font-bold select-all">{k.code}</td>
-                    <td className="px-6 py-4 font-serif text-[#1F1F1F]">{k.restaurant}</td>
-                    <td className="px-6 py-4 font-mono text-[10px] text-[#6A6A6A]">{k.boundTo || '---'}</td>
-                    <td className="px-6 py-4 text-right flex justify-end gap-2 items-center">
-                      <StatusBadge status={k.status} />
-                      <button onClick={() => onDelete(k.id)} className="text-red-500 hover:text-red-700 ml-2">
-                        <XCircle size={16} />
-                      </button>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-gray-50 border-b border-[#1F1F1F]">
+                  <tr>
+                    <th className="px-6 py-3 font-mono font-normal text-[#6A6A6A] text-[10px] uppercase tracking-widest">Token</th>
+                    <th className="px-6 py-3 font-mono font-normal text-[#6A6A6A] text-[10px] uppercase tracking-widest">Entity</th>
+                    <th className="px-6 py-3 font-mono font-normal text-[#6A6A6A] text-[10px] uppercase tracking-widest">Bind Hash</th>
+                    <th className="px-6 py-3 font-mono font-normal text-[#6A6A6A] text-[10px] uppercase tracking-widest text-right">State</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {keys.map((k, idx) => (
+                    <tr key={idx} className="hover:bg-[#FFFFF0]">
+                      <td className="px-6 py-4 font-mono text-[#1F1F1F] text-xs font-bold select-all">{k.code}</td>
+                      <td className="px-6 py-4">
+                        <div className="font-serif text-[#1F1F1F]">{k.restaurant}</div>
+                        {k.entityId && <div className="text-[10px] font-mono text-[#6A6A6A] mt-1 select-all">{k.entityId}</div>}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-[10px] text-[#6A6A6A]">{k.boundTo || '---'}</td>
+                      <td className="px-6 py-4 text-right flex justify-end gap-2 items-center">
+                        <StatusBadge status={k.status} />
+                        <button onClick={() => onDelete(k.id)} className="text-red-500 hover:text-red-700 ml-2">
+                          <XCircle size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </Card>
         </div>
       </div>

@@ -1,8 +1,17 @@
-function generateActivationCode() {
-    const part1 = () => Math.random().toString(36).substring(2, 3).toUpperCase();
-    const part4 = () => Math.random().toString(36).substring(2, 6).toUpperCase();
+const crypto = require('crypto');
 
-    return `TAP${part1()}-${part4()}-${part4()}-${part4()}`;
+const CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+
+function generateBlock(length = 4) {
+    let block = '';
+    for (let i = 0; i < length; i++) {
+        block += CHARSET[crypto.randomInt(CHARSET.length)];
+    }
+    return block;
+}
+
+function generateActivationCode() {
+    return `DINE-${generateBlock()}-${generateBlock()}-${generateBlock()}`;
 }
 
 module.exports = generateActivationCode;

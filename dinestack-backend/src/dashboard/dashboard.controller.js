@@ -91,6 +91,7 @@ const getKeys = async (req, res) => {
             id: k.id,
             code: k.code,
             restaurant: k.restaurant ? k.restaurant.name : (k.entityName || "Unassigned"),
+            entityId: k.restaurant ? k.restaurant.id : null, // Add entity ID
             status: k.isUsed ? "Used" : (new Date(k.expiresAt) < new Date() ? "Expired" : "Unused"),
             created: k.createdAt.toISOString().split('T')[0],
             boundTo: k.isUsed ? "Bound" : null
@@ -179,6 +180,24 @@ const deleteRestaurant = async (req, res) => {
             await tx.device.deleteMany({
                 where: { restaurantId: id }
             });
+
+            // Delete potentially missing schema relationships (Cascading Delete for Legacy Tables)
+            const cascadeTables = [
+                { name: "OrderItem", sql: `DELETE FROM "OrderItem" WHERE "orderId" IN (SELECT "id" FROM "Order" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1))` },
+                { name: "Order", sql: `DELETE FROM "Order" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1)` },
+                { name: "Session", sql: `DELETE FROM "Session" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1)` },
+                { name: "Table", sql: `DELETE FROM "Table" WHERE "restaurantId" = $1` },
+                { name: "MenuItem", sql: `DELETE FROM "MenuItem" WHERE "categoryId" IN (SELECT "id" FROM "Category" WHERE "restaurantId" = $1)` },
+                { name: "Category", sql: `DELETE FROM "Category" WHERE "restaurantId" = $1` }
+            ];
+
+            for (const table of cascadeTables) {
+                try {
+                    await tx.$executeRawUnsafe(table.sql, id);
+                } catch (e) {
+                    console.warn(`[DELETE_WARN] Failed to cascade delete ${table.name}: ${e.message}`);
+                }
+            }
 
             // Delete the restaurant
             await tx.restaurant.delete({
