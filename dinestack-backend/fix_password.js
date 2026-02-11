@@ -15,7 +15,7 @@ async function fixPassword() {
 
         // Generate a valid bcrypt hash
         const hashedPassword = await bcrypt.hash(password, 10);
-        console.log("Generated hash:", hashedPassword);
+        // Hash generated successfully
 
         // Upsert the user: Create if not exists, Update if exists
         const admin = await prisma.superAdmin.upsert({
@@ -30,7 +30,6 @@ async function fixPassword() {
         });
 
         console.log("Successfully updated admin password for:", admin.email);
-        console.log("New stored hash:", admin.password);
 
     } catch (e) {
         console.error("Error updating password:", e);
