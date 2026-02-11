@@ -1,50 +1,60 @@
-const { ClerkExpressRequireAuth } = require('@clerk/clerk-sdk-node');
+const jwt = require("jsonwebtoken");
 
-const requireSuperAdmin = [
-    // Middleware to verify the Clerk session token
-    // Explicitly pass the secret key to ensure it's picked up even if process.env is lazy
-    ClerkExpressRequireAuth({
-        secretKey: process.env.CLERK_SECRET_KEY
-    }),
+exports.requireSuperAdmin = (req, res, next) => {
+    const authHeader = req.headers.authorization;
 
-    // Custom middleware to enforce security policies
-    (req, res, next) => {
-        // 1. Verify Authentication
-        if (!req.auth || !req.auth.userId) {
-            console.error("[AuthGuard] No auth session found. Clerk middleware might have failed or passed without user.");
-            return res.status(401).json({
-                message: "Unauthorized: No valid session found",
-                code: "AUTH_MISSING"
+    if (!authHeader) {
+        return res.status(401).json({
+            message: "Authorization header missing",
+            code: "AUTH_HEADER_MISSING"
+        });
+    }
+
+    if (!authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({
+            message: "Invalid authorization format. Expected: Bearer <token>",
+            code: "AUTH_FORMAT_INVALID"
+        });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    if (!token) {
+        return res.status(401).json({
+            message: "Token not provided",
+            code: "TOKEN_MISSING"
+        });
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        if (decoded.role !== "SUPER_ADMIN") {
+            return res.status(403).json({
+                message: "Access denied. Super Admin role required.",
+                code: "ROLE_FORBIDDEN"
             });
         }
 
-        const { sessionClaims } = req.auth;
-
-        // 2. Primary Access Control: Role Check
-        const role = sessionClaims?.metadata?.role || sessionClaims?.role; // Fallback to various claim paths
-
-        // 3. Secondary Access Control: Strict Email Domain
-        // IMPORTANT: User must match one of these to access the system.
-        const email = sessionClaims?.email || sessionClaims?.primary_email_address || sessionClaims?.user?.email;
-
-        const isSuperAdmin = role === 'super_admin';
-        const isInternalEmail = email && email.endsWith('@dinestack.in');
-
-        if (isSuperAdmin || isInternalEmail) {
-            // Log successful access for audit (optional, avoid spamming logs)
-            // console.log(`[AuthGuard] Authorized access: ${email} (${role})`);
-            return next();
+        req.superAdmin = decoded;
+        next();
+    } catch (err) {
+        if (err.name === "TokenExpiredError") {
+            return res.status(401).json({
+                message: "Token has expired. Please login again.",
+                code: "TOKEN_EXPIRED",
+                expiredAt: err.expiredAt
+            });
         }
-
-        // 4. Deny Access - Strict Lockout
-        console.warn(`[AuthGuard] ⛔ ACCESS DENIED for user ${req.auth.userId}. Email: ${email}, Role: ${role}. REASON: Not in allowlist.`);
-
-        return res.status(403).json({
-            message: "Access Denied: You are not authorized to use this system. Please contact the administrator.",
-            code: "ACCESS_FORBIDDEN_POLICY",
-            details: "Your email or role is not allowlisted."
+        if (err.name === "JsonWebTokenError") {
+            return res.status(401).json({
+                message: "Invalid token",
+                code: "TOKEN_INVALID"
+            });
+        }
+        return res.status(401).json({
+            message: "Token verification failed",
+            code: "TOKEN_ERROR"
         });
     }
-];
-
-exports.requireSuperAdmin = requireSuperAdmin;
+};

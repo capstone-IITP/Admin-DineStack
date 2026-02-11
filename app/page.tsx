@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { useAuth, useUser, UserButton } from '@clerk/nextjs';
 import {
   Shield,
   Server,
@@ -663,9 +662,6 @@ const AuditView = ({ logs }: AuditViewProps) => (
 
 export default function DineStackAdmin() {
   const router = useRouter();
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const { user } = useUser();
-
   // Production: use same-origin (Vercel rewrites handle routing)
   // Development: use localhost
   const API_BASE = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
@@ -688,23 +684,24 @@ export default function DineStackAdmin() {
 
   // Fetch data on load
   const fetchData = async () => {
-    if (!isLoaded || !isSignedIn) return;
+    const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+
+    const headers = { "Authorization": `Bearer ${token}` };
+    const baseUrl = `${API_BASE}/super-admin/dashboard`;
 
     try {
       setIsLoading(true); // Show loading state on refresh
       setError(null);
 
-      const token = await getToken();
-      const headers = { "Authorization": `Bearer ${token}` };
-      const baseUrl = `${API_BASE}/super-admin/dashboard`;
-
       // Ping check
       const pingRes = await fetch(`${baseUrl}/ping`, { headers, cache: 'no-store' });
       if (!pingRes.ok) {
-        if (pingRes.status === 401 || pingRes.status === 403) {
-          // If 403, it means Clerk auth passed but role check failed, or no token
-          setError("Access Denied: You do not have Super Admin privileges.");
-          setIsLoading(false);
+        if (pingRes.status === 401) {
+          router.push('/login');
           return;
         }
         throw new Error(`Backend ping failed: ${pingRes.status}`);
@@ -724,8 +721,8 @@ export default function DineStackAdmin() {
       if (devicesRes.ok) setDevices(await devicesRes.json());
       if (logsRes.ok) {
         const logsData = await logsRes.json();
-        const sortedLogs = Array.isArray(logsData) ? logsData.sort((a: Log, b: Log) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()) : [];
-        setLogs(sortedLogs);
+        // Ensure dates are formatted as expected
+        setLogs(logsData);
       }
     } catch (error: any) {
       console.error("Failed to fetch dashboard data:", error);
@@ -736,19 +733,16 @@ export default function DineStackAdmin() {
   };
 
   useEffect(() => {
-    if (isLoaded && !isSignedIn) {
-      router.push('/sign-in');
-    } else if (isLoaded && isSignedIn) {
-      fetchData();
-    }
-  }, [isLoaded, isSignedIn, router]);
+    fetchData();
+  }, [router]);
 
   const handleLogout = () => {
-    // Clerk handles logout via UserButton, or we can use signOut()
-    window.location.href = '/sign-in';
+    localStorage.removeItem('SUPER_ADMIN_TOKEN');
+    localStorage.removeItem('admin');
+    router.push('/login');
   };
 
-  if (!isLoaded || isLoading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-[#FFFFF0] flex items-center justify-center">
         <div className="font-mono text-xs uppercase tracking-widest text-[#8D0B41] animate-pulse">
@@ -795,7 +789,8 @@ export default function DineStackAdmin() {
   const handleNewRestaurant = async (name: string) => {
     if (!name) return;
     try {
-      const token = await getToken();
+      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
+      console.log('[DEBUG] Creating restaurant with token:', token ? `${token.substring(0, 20)}...` : 'MISSING');
       const res = await fetch(`${API_BASE}/super-admin/dashboard/restaurants`, {
         method: 'POST',
         headers: {
@@ -827,7 +822,7 @@ export default function DineStackAdmin() {
 
   const handleGenerateKey = async (restaurantId: string) => {
     try {
-      const token = await getToken();
+      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
       const res = await fetch(`${API_BASE}/super-admin/activation-codes`, {
         method: 'POST',
         headers: {
@@ -862,7 +857,7 @@ export default function DineStackAdmin() {
     if (!keyToDelete) return;
 
     try {
-      const token = await getToken();
+      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
       const res = await fetch(`${API_BASE}/super-admin/activation-codes/${keyToDelete}`, {
         method: 'DELETE',
         headers: {
@@ -891,7 +886,7 @@ export default function DineStackAdmin() {
     if (!restaurantToDelete) return;
 
     try {
-      const token = await getToken();
+      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
       const res = await fetch(`${API_BASE}/super-admin/dashboard/restaurants/${restaurantToDelete}`, {
         method: 'DELETE',
         headers: {
@@ -925,7 +920,7 @@ export default function DineStackAdmin() {
     const newStatus = (currentStatus === 'Suspended' || currentStatus === 'SUSPENDED') ? 'ACTIVE' : 'SUSPENDED';
 
     try {
-      const token = await getToken();
+      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
       const res = await fetch(`${API_BASE}/super-admin/dashboard/restaurants/${restaurantToSuspend}/status`, {
         method: 'PATCH',
         headers: {
