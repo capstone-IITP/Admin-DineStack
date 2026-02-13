@@ -195,6 +195,8 @@ const deleteRestaurant = async (req, res) => {
 
             // Delete potentially missing schema relationships (Cascading Delete for Legacy Tables)
             const cascadeTables = [
+                { name: "Payment", sql: `DELETE FROM "Payment" WHERE "billId" IN (SELECT "id" FROM "Bill" WHERE "orderId" IN (SELECT "id" FROM "Order" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1)))` },
+                { name: "Bill", sql: `DELETE FROM "Bill" WHERE "orderId" IN (SELECT "id" FROM "Order" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1))` },
                 { name: "OrderItem", sql: `DELETE FROM "OrderItem" WHERE "orderId" IN (SELECT "id" FROM "Order" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1))` },
                 { name: "Order", sql: `DELETE FROM "Order" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1)` },
                 { name: "Session", sql: `DELETE FROM "Session" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1)` },
@@ -204,10 +206,17 @@ const deleteRestaurant = async (req, res) => {
             ];
 
             for (const table of cascadeTables) {
+                // Execute without try-catch to let errors bubble up (except 'table not found' which we can ignore if needed, but for now let's see the error)
                 try {
                     await tx.$executeRawUnsafe(table.sql, id);
                 } catch (e) {
-                    console.warn(`[DELETE_WARN] Failed to cascade delete ${table.name}: ${e.message}`);
+                    // Ignore "relation does not exist" error (code 42P01 in Postgres)
+                    // But rethrow constraint violations
+                    if (e.code === '42P01') {
+                        console.warn(`[DELETE_SKIP] Table ${table.name} does not exist.`);
+                    } else {
+                        throw e;
+                    }
                 }
             }
 
