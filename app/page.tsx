@@ -918,9 +918,13 @@ export default function DineStackAdmin() {
       if (res.ok) {
         addLog('ENTITY_DELETE', restaurantToDelete, 'Deleted entity and associated devices');
         fetchData(); // Refresh all data
+      } else {
+        const parsed = await safeJsonParse(res); // Use the helper
+        alert(`Failed to delete entity: ${parsed.data?.error || parsed.data?.message || 'Unknown server error'}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      alert(`Delete request failed: ${err.message}`);
     } finally {
       setRestaurantDeleteModalOpen(false);
       setRestaurantToDelete(null);
