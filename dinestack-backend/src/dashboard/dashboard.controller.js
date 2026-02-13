@@ -194,19 +194,23 @@ const deleteRestaurant = async (req, res) => {
             });
 
             // Delete potentially missing schema relationships (Cascading Delete for Legacy Tables)
+            // Enhanced with PairCode and optimized using direct FKs where available
             const cascadeTables = [
-                { name: "OrderItem", sql: `DELETE FROM "OrderItem" WHERE "orderId" IN (SELECT "id" FROM "Order" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1))` },
-                { name: "Order", sql: `DELETE FROM "Order" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1)` },
-                { name: "Session", sql: `DELETE FROM "Session" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1)` },
-                { name: "Table", sql: `DELETE FROM "Table" WHERE "restaurantId" = $1` },
-                { name: "MenuItem", sql: `DELETE FROM "MenuItem" WHERE "categoryId" IN (SELECT "id" FROM "Category" WHERE "restaurantId" = $1)` },
-                { name: "Category", sql: `DELETE FROM "Category" WHERE "restaurantId" = $1` }
+                { name: "PairCode", sql: `DELETE FROM "PairCode" WHERE "restaurantId" = $1` },
+                { name: "OrderItem", sql: `DELETE FROM "OrderItem" WHERE "orderId" IN (SELECT "id" FROM "Order" WHERE "restaurantId" = $1)` },
+                { name: "Order", sql: `DELETE FROM "Order" WHERE "restaurantId" = $1` },
+                { name: "Session", sql: `DELETE FROM "Session" WHERE "restaurantId" = $1` },
+                { name: "MenuItem", sql: `DELETE FROM "MenuItem" WHERE "restaurantId" = $1` },
+                { name: "Category", sql: `DELETE FROM "Category" WHERE "restaurantId" = $1` },
+                { name: "Table", sql: `DELETE FROM "Table" WHERE "restaurantId" = $1` }
             ];
 
             for (const table of cascadeTables) {
                 try {
                     await tx.$executeRawUnsafe(table.sql, id);
                 } catch (e) {
+                    // Only warn if table actually exists but delete failed
+                    // If table doesn't exist (e.g. legacy cleanup), we might want to ignore or log differently
                     console.warn(`[DELETE_WARN] Failed to cascade delete ${table.name}: ${e.message}`);
                 }
             }
