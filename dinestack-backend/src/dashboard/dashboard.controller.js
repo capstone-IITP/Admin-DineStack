@@ -195,9 +195,6 @@ const deleteRestaurant = async (req, res) => {
 
             // Delete potentially missing schema relationships (Cascading Delete for Legacy Tables)
             const cascadeTables = [
-                { name: "PairCode", sql: `DELETE FROM "PairCode" WHERE "restaurantId" = $1` },
-                { name: "Payment", sql: `DELETE FROM "Payment" WHERE "billId" IN (SELECT "id" FROM "Bill" WHERE "orderId" IN (SELECT "id" FROM "Order" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1)))` },
-                { name: "Bill", sql: `DELETE FROM "Bill" WHERE "orderId" IN (SELECT "id" FROM "Order" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1))` },
                 { name: "OrderItem", sql: `DELETE FROM "OrderItem" WHERE "orderId" IN (SELECT "id" FROM "Order" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1))` },
                 { name: "Order", sql: `DELETE FROM "Order" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1)` },
                 { name: "Session", sql: `DELETE FROM "Session" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1)` },
