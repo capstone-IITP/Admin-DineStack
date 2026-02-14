@@ -193,7 +193,20 @@ const deleteRestaurant = async (req, res) => {
                 where: { restaurantId: id }
             });
 
-            // Delete associated Activation Codes (fix for orphaned entities)
+            // 1. Break circular dependency (Legacy activationCodeId FK)
+            // If the Restaurant points to an ActivationCode, we must clear this reference first
+            // to allow the ActivationCode to be deleted without FK violation.
+            try {
+                await tx.restaurant.update({
+                    where: { id },
+                    data: { activationCodeId: null }
+                });
+            } catch (e) {
+                // Ignore if it fails (e.g. record not found or other weirdness), 
+                // the main delete will catch it if it's critical.
+            }
+
+            // 2. Delete associated Activation Codes (fix for orphaned entities)
             await tx.activationCode.deleteMany({
                 where: { restaurantId: id }
             });
@@ -207,7 +220,9 @@ const deleteRestaurant = async (req, res) => {
                 { name: "Session", sql: `DELETE FROM "Session" WHERE "restaurantId" = $1` },
                 { name: "MenuItem", sql: `DELETE FROM "MenuItem" WHERE "restaurantId" = $1` },
                 { name: "Category", sql: `DELETE FROM "Category" WHERE "restaurantId" = $1` },
-                { name: "Table", sql: `DELETE FROM "Table" WHERE "restaurantId" = $1` }
+                { name: "Table", sql: `DELETE FROM "Table" WHERE "restaurantId" = $1` },
+                // Add RecoveryCode to list (it's not in Prisma schema but exists in DB)
+                { name: "RecoveryCode", sql: `DELETE FROM "RecoveryCode" WHERE "restaurantId" = $1` }
             ];
 
             for (const table of cascadeTables) {

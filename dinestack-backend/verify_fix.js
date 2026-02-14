@@ -26,6 +26,10 @@ async function main() {
     try {
         console.log("Starting verification...");
 
+        // 0. List all tables to see what we might be missing
+        const tables = await prisma.$queryRaw`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`;
+        console.log("Database Tables:", tables.map(t => t.table_name).sort());
+
         // 1. Create a dummy restaurant
         const uniqueName = `TestRest_${Date.now()}`;
         console.log(`Creating dummy restaurant: ${uniqueName}`);
@@ -78,8 +82,36 @@ async function main() {
             });
             createdActivationCodeId = ac.id;
             console.log("Dummy ActivationCode inserted with ID:", createdActivationCodeId);
+
+            // Simulate circular dependency (Legacy behavior?)
+            // If the application sets activationCodeId on Restaurant, we must reproduce that.
+            console.log("Setting activationCodeId on Restaurant to " + createdActivationCodeId);
+            try {
+                await prisma.restaurant.update({
+                    where: { id: createdRestaurantId },
+                    data: { activationCodeId: createdActivationCodeId }
+                });
+                console.log("Circular dependency established.");
+            } catch (err) {
+                console.error("FAILED to set circular dependency:", err.message);
+            }
+
+            // 3. Insert a RecoveryCode (New check based on table list)
+            console.log("Inserting dummy RecoveryCode...");
+            try {
+                // Correct columns based on output: used, createdAt, id, codeHash, restaurantId
+                console.log("Inserting RecoveryCode with correct columns...");
+                await prisma.$executeRaw`
+                    INSERT INTO "RecoveryCode" ("id", "codeHash", "restaurantId", "used", "createdAt") 
+                    VALUES (gen_random_uuid(), 'hash_of_code', ${createdRestaurantId}, false, NOW())
+                `;
+                console.log("Dummy RecoveryCode inserted.");
+            } catch (e) {
+                console.error("Could not insert RecoveryCode (STILL FAILING):", e.message);
+            }
+
         } catch (e) {
-            console.warn("Could not insert ActivationCode:", e.message);
+            console.warn("Could not insert ActivationCode or set circular dependency:", e.message);
         }
 
         // 2c. Revoke the restaurant
