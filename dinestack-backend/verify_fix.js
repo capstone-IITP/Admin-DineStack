@@ -60,6 +60,36 @@ async function main() {
             console.warn("Could not insert PairCode (maybe table structure mismatch), skipping PairCode insertion for test.", e.message);
         }
 
+        let createdActivationCodeId = null;
+        // 2b. Insert an ActivationCode (simulating the issue)
+        console.log("Inserting dummy ActivationCode...");
+        try {
+            const acCode = `DINE-TEST-${Math.floor(Math.random() * 1000)}`;
+            const ac = await prisma.activationCode.create({
+                data: {
+                    code: acCode,
+                    restaurantId: createdRestaurantId,
+                    entityName: uniqueName,
+                    plan: 'Standard',
+                    durationDays: 30,
+                    maxTables: 10,
+                    expiresAt: new Date(Date.now() + 86400000)
+                }
+            });
+            createdActivationCodeId = ac.id;
+            console.log("Dummy ActivationCode inserted with ID:", createdActivationCodeId);
+        } catch (e) {
+            console.warn("Could not insert ActivationCode:", e.message);
+        }
+
+        // 2c. Revoke the restaurant
+        console.log("Revoking restaurant...");
+        await prisma.restaurant.update({
+            where: { id: createdRestaurantId },
+            data: { status: 'REVOKED' }
+        });
+        console.log("Restaurant revoked.");
+
         // 3. Call deleteRestaurant
         console.log("Calling deleteRestaurant controller...");
         const req = mockReq({ id: createdRestaurantId });
@@ -79,6 +109,15 @@ async function main() {
                 console.log("SUCCESS: Restaurant was deleted.");
             } else {
                 console.error("FAILURE: Restaurant still exists in DB.");
+            }
+
+            if (createdActivationCodeId) {
+                const acCheck = await prisma.activationCode.findUnique({ where: { id: createdActivationCodeId } });
+                if (acCheck) {
+                    console.log("FAILURE (Orphaned): ActivationCode still exists.", acCheck);
+                } else {
+                    console.log("SUCCESS: ActivationCode was deleted.");
+                }
             }
         }
 

@@ -193,6 +193,11 @@ const deleteRestaurant = async (req, res) => {
                 where: { restaurantId: id }
             });
 
+            // Delete associated Activation Codes (fix for orphaned entities)
+            await tx.activationCode.deleteMany({
+                where: { restaurantId: id }
+            });
+
             // Delete potentially missing schema relationships (Cascading Delete for Legacy Tables)
             // Enhanced with PairCode and optimized using direct FKs where available
             const cascadeTables = [
