@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Shield, ShieldOff, KeyRound, AlertTriangle, Copy, Check, Loader2 } from "lucide-react";
+import { Shield, ShieldOff, KeyRound, AlertTriangle, Download, Loader2 } from "lucide-react";
 
 interface TwoFactorSettingsProps {
     apiBase: string;
@@ -22,7 +22,6 @@ export default function TwoFactorSettings({ apiBase, fetchWithAuth }: TwoFactorS
     const [manualKey, setManualKey] = useState("");
     const [setupOtp, setSetupOtp] = useState("");
     const [backupCodes, setBackupCodes] = useState<string[]>([]);
-    const [copiedCodes, setCopiedCodes] = useState(false);
 
     // Disable flow state
     const [disablePassword, setDisablePassword] = useState("");
@@ -115,11 +114,18 @@ export default function TwoFactorSettings({ apiBase, fetchWithAuth }: TwoFactorS
         }
     };
 
-    const copyBackupCodes = () => {
-        const text = backupCodes.join("\n");
-        navigator.clipboard.writeText(text);
-        setCopiedCodes(true);
-        setTimeout(() => setCopiedCodes(false), 2000);
+    const downloadBackupCodes = () => {
+        const text = "DineStack 2FA Backup Codes\n" +
+            "Generated: " + new Date().toLocaleString() + "\n" +
+            "Each code can only be used once.\n\n" +
+            backupCodes.map((code, i) => `${i + 1}. ${code}`).join("\n") + "\n";
+        const blob = new Blob([text], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "dinestack-2fa-backup-codes.txt";
+        a.click();
+        URL.revokeObjectURL(url);
     };
 
     // =====================================================================
@@ -322,11 +328,11 @@ export default function TwoFactorSettings({ apiBase, fetchWithAuth }: TwoFactorS
 
                         <div className="flex gap-3">
                             <button
-                                onClick={copyBackupCodes}
+                                onClick={downloadBackupCodes}
                                 className="flex items-center gap-2 px-6 py-3 text-xs font-bold uppercase tracking-widest bg-white text-[#1F1F1F] border border-[#1F1F1F] hover:bg-[#FFFFF0] transition-all"
                             >
-                                {copiedCodes ? <Check size={14} /> : <Copy size={14} />}
-                                {copiedCodes ? "Copied!" : "Copy All"}
+                                <Download size={14} />
+                                Download
                             </button>
                             <button
                                 onClick={() => { setStep("idle"); setBackupCodes([]); fetchStatus(); }}
