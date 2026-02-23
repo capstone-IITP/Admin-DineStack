@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import TwoFactorSettings from '../components/TwoFactorSettings';
 import {
   Shield,
   Server,
@@ -1078,6 +1079,7 @@ export default function DineStackAdmin() {
             System Security
           </div>
           <NavItem id="audit" label="Audit Ledger" icon={Terminal} />
+          <NavItem id="2fa" label="Two-Factor Auth" icon={Shield} />
           <NavItem id="users" label="Staff Access" icon={Users} />
           <NavItem id="support" label="Overrides" icon={AlertTriangle} />
         </nav>
@@ -1109,6 +1111,7 @@ export default function DineStackAdmin() {
           {currentView === 'devices' && <DeviceView devices={devices} />}
           {currentView === 'support' && <SupportView onOverride={handleSupportOverride} />}
           {currentView === 'audit' && <AuditView logs={logs} />}
+          {currentView === '2fa' && <TwoFactorSettings apiBase={API_BASE} fetchWithAuth={fetchWithAuth} />}
 
           {/* Placeholder for Users View */}
           {currentView === 'users' && (

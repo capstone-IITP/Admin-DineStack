@@ -113,7 +113,26 @@ exports.loginSuperAdmin = async (req, res) => {
             return res.status(401).json(genericError);
         }
 
-        // --- Successful login ---
+        // --- Successful password verification ---
+
+        // If 2FA is enabled, issue a temp token instead of a real session
+        if (admin.twoFactorEnabled) {
+            const tempToken = jwt.sign(
+                { adminId: admin.id, purpose: "2fa-verify" },
+                process.env.JWT_SECRET,
+                { expiresIn: "5m" }
+            );
+
+            await logAudit(admin.id, "LOGIN_2FA_PENDING", null);
+
+            // DO NOT reset failedAttempts or set lastLogin yet
+            return res.json({
+                requires2FA: true,
+                tempToken
+            });
+        }
+
+        // --- No 2FA — create session normally ---
 
         // Reset failed attempts, clear lock, update lastLogin
         await prisma.superAdmin.update({

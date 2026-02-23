@@ -9,16 +9,25 @@ datasource db {
 
 
 model SuperAdmin {
-  id             String    @id @default(uuid())
-  email          String    @unique
-  passwordHash   String
-  isActive       Boolean   @default(true)
-  failedAttempts Int       @default(0)
-  lockUntil      DateTime?
-  lastLogin      DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  refreshTokens  RefreshToken[]
+  id                   String    @id @default(uuid())
+  email                String    @unique
+  passwordHash         String
+  isActive             Boolean   @default(true)
+  failedAttempts       Int       @default(0)
+  lockUntil            DateTime?
+  lastLogin            DateTime?
+
+  // 2FA fields
+  twoFactorEnabled     Boolean   @default(false)
+  twoFactorSecret      String?   // AES-256-CBC encrypted TOTP secret
+  twoFactorBackupCodes String[]  // bcrypt-hashed one-time backup codes
+  twoFactorEnabledAt   DateTime?
+  otpAttempts           Int       @default(0)
+  otpBlockedUntil       DateTime?
+
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  refreshTokens        RefreshToken[]
 }
 
 model SuperAdminAuditLog {
