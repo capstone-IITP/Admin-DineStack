@@ -1,5 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcrypt");
+const { validatePassword, BCRYPT_SALT_ROUNDS } = require("./utils/passwordPolicy");
 
 const prisma = new PrismaClient();
 
@@ -14,6 +15,17 @@ async function main() {
         return;
     }
 
+    // Validate password policy
+    const { valid, errors } = validatePassword(password);
+    if (!valid) {
+        console.error("Password does not meet security policy:");
+        errors.forEach(e => console.error(`  ✗ ${e}`));
+        console.error("\nRequirements: min 12 chars, 1 upper, 1 lower, 1 digit, 1 special char");
+        return;
+    }
+
+    const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
+
     // Check if admin already exists
     const existingAdmin = await prisma.superAdmin.findUnique({
         where: { email },
@@ -21,25 +33,23 @@ async function main() {
 
     if (existingAdmin) {
         console.log("SuperAdmin already exists, updating password...");
-        const hashedPassword = await bcrypt.hash(password, 10);
         await prisma.superAdmin.update({
             where: { email },
-            data: { password: hashedPassword },
+            data: { passwordHash: hashedPassword },
         });
-        console.log("SuperAdmin password updated.");
+        console.log("SuperAdmin password updated (bcrypt, 12 rounds).");
         return;
     }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
 
     const admin = await prisma.superAdmin.create({
         data: {
             email,
-            password: hashedPassword,
+            passwordHash: hashedPassword,
         },
     });
 
     console.log("SuperAdmin created:", admin.email);
+    console.log("Password hashed with bcrypt (12 salt rounds).");
 }
 
 main()

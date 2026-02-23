@@ -3,18 +3,20 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Shield, AlertTriangle, ArrowRight } from "lucide-react";
+import { Shield, AlertTriangle, ArrowRight, Lock } from "lucide-react";
 
 export default function LoginPage() {
     const router = useRouter();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
+    const [lockInfo, setLockInfo] = useState<{ locked: boolean; retryAfterMinutes?: number } | null>(null);
     const [loading, setLoading] = useState(false);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
+        setLockInfo(null);
         setLoading(true);
         // Production: use same-origin (Vercel rewrites handle routing)
         // Development: use localhost
@@ -26,6 +28,7 @@ export default function LoginPage() {
             const res = await fetch(`${API_BASE}/super-admin/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                credentials: "include", // Required to receive httpOnly cookies
                 body: JSON.stringify({ email, password }),
             });
 
@@ -39,11 +42,20 @@ export default function LoginPage() {
                 throw new Error("Server returned an invalid response. Please check if the backend is running.");
             }
 
+            // Handle account lockout (423)
+            if (res.status === 423) {
+                setLockInfo({
+                    locked: true,
+                    retryAfterMinutes: data.retryAfterMinutes || 15
+                });
+                return;
+            }
+
             if (!res.ok) {
                 throw new Error(data.message || "Login failed");
             }
 
-            // Store auth data
+            // Store auth data — access token for Authorization header fallback
             localStorage.setItem("SUPER_ADMIN_TOKEN", data.token);
             localStorage.setItem("admin", JSON.stringify(data.admin));
 
@@ -80,7 +92,24 @@ export default function LoginPage() {
                     <div className="absolute top-0 right-0 w-4 h-4 bg-[#8D0B41]"></div>
 
                     <form onSubmit={handleLogin} className="space-y-6">
-                        {error && (
+                        {/* Account Locked Warning */}
+                        {lockInfo?.locked && (
+                            <div className="bg-orange-50 border-2 border-orange-400 p-4 flex items-start gap-3">
+                                <Lock className="text-orange-600 shrink-0 mt-0.5" size={18} />
+                                <div>
+                                    <p className="font-mono text-xs text-orange-800 font-bold uppercase tracking-wide mb-1">
+                                        Account Temporarily Locked
+                                    </p>
+                                    <p className="font-mono text-[10px] text-orange-700">
+                                        Too many failed login attempts. Please try again in{' '}
+                                        <span className="font-bold">{lockInfo.retryAfterMinutes} minute{lockInfo.retryAfterMinutes !== 1 ? 's' : ''}</span>.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Error Alert */}
+                        {error && !lockInfo?.locked && (
                             <div className="bg-red-50 border border-[#8D0B41] p-3 flex items-start gap-3">
                                 <AlertTriangle className="text-[#8D0B41] shrink-0" size={16} />
                                 <p className="font-mono text-xs text-[#8D0B41] uppercase tracking-wide">{error}</p>
@@ -117,7 +146,7 @@ export default function LoginPage() {
 
                         <button
                             type="submit"
-                            disabled={loading}
+                            disabled={loading || lockInfo?.locked}
                             className="w-full bg-[#1F1F1F] text-white font-mono text-sm font-bold uppercase tracking-widest py-4 border border-[#1F1F1F] hover:bg-[#333] active:translate-y-1 active:shadow-none shadow-[4px_4px_0px_0px_#8D0B41] transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                             {loading ? "Authenticating..." : "Initialize Session"}

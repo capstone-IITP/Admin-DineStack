@@ -688,6 +688,61 @@ export default function DineStackAdmin() {
   const [restaurantToSuspend, setRestaurantToSuspend] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // --- Auth-aware fetch wrapper with automatic token refresh ---
+  const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Response> => {
+    const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
+    const mergedOptions: RequestInit = {
+      ...options,
+      credentials: 'include' as RequestCredentials,
+      headers: {
+        ...(options.headers || {}),
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+      cache: 'no-store' as RequestCache,
+    };
+
+    let res = await fetch(url, mergedOptions);
+
+    // If token expired, attempt refresh once
+    if (res.status === 401) {
+      const body = await res.clone().json().catch(() => ({}));
+      if (body.code === 'TOKEN_EXPIRED') {
+        // Try to refresh
+        const refreshRes = await fetch(`${API_BASE}/super-admin/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+        });
+
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json();
+          // Update stored access token
+          if (refreshData.token) {
+            localStorage.setItem('SUPER_ADMIN_TOKEN', refreshData.token);
+          }
+          // Retry original request with new token
+          const retryOptions: RequestInit = {
+            ...options,
+            credentials: 'include' as RequestCredentials,
+            headers: {
+              ...(options.headers || {}),
+              ...(refreshData.token ? { 'Authorization': `Bearer ${refreshData.token}` } : {}),
+            },
+            cache: 'no-store' as RequestCache,
+          };
+          res = await fetch(url, retryOptions);
+        } else {
+          // Refresh failed — redirect to login
+          localStorage.removeItem('SUPER_ADMIN_TOKEN');
+          localStorage.removeItem('admin');
+          router.push('/login');
+          return res;
+        }
+      }
+    }
+
+    return res;
+  };
+
   // Fetch data on load
   const fetchData = async () => {
     const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
@@ -696,7 +751,6 @@ export default function DineStackAdmin() {
       return;
     }
 
-    const headers = { "Authorization": `Bearer ${token}` };
     const baseUrl = `${API_BASE}/super-admin/dashboard`;
 
     try {
@@ -704,7 +758,7 @@ export default function DineStackAdmin() {
       setError(null);
 
       // Ping check
-      const pingRes = await fetch(`${baseUrl}/ping`, { headers, cache: 'no-store' });
+      const pingRes = await fetchWithAuth(`${baseUrl}/ping`);
       if (!pingRes.ok) {
         if (pingRes.status === 401) {
           router.push('/login');
@@ -714,11 +768,11 @@ export default function DineStackAdmin() {
       }
 
       const [statsRes, restRes, keysRes, devicesRes, logsRes] = await Promise.all([
-        fetch(`${baseUrl}/stats`, { headers, cache: 'no-store' }),
-        fetch(`${baseUrl}/restaurants`, { headers, cache: 'no-store' }),
-        fetch(`${baseUrl}/keys`, { headers, cache: 'no-store' }),
-        fetch(`${baseUrl}/devices`, { headers, cache: 'no-store' }),
-        fetch(`${baseUrl}/logs`, { headers, cache: 'no-store' })
+        fetchWithAuth(`${baseUrl}/stats`),
+        fetchWithAuth(`${baseUrl}/restaurants`),
+        fetchWithAuth(`${baseUrl}/keys`),
+        fetchWithAuth(`${baseUrl}/devices`),
+        fetchWithAuth(`${baseUrl}/logs`)
       ]);
 
       if (statsRes.ok) setStats(await statsRes.json());
@@ -727,7 +781,6 @@ export default function DineStackAdmin() {
       if (devicesRes.ok) setDevices(await devicesRes.json());
       if (logsRes.ok) {
         const logsData = await logsRes.json();
-        // Ensure dates are formatted as expected
         setLogs(logsData);
       }
     } catch (error: any) {
@@ -742,7 +795,18 @@ export default function DineStackAdmin() {
     fetchData();
   }, [router]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API_BASE}/super-admin/logout`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('SUPER_ADMIN_TOKEN') || ''}`
+        }
+      });
+    } catch {
+      // Logout should always proceed even if backend call fails
+    }
     localStorage.removeItem('SUPER_ADMIN_TOKEN');
     localStorage.removeItem('admin');
     router.push('/login');
@@ -795,13 +859,9 @@ export default function DineStackAdmin() {
   const handleNewRestaurant = async (name: string) => {
     if (!name) return;
     try {
-      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
-      const res = await fetch(`${API_BASE}/super-admin/dashboard/restaurants`, {
+      const res = await fetchWithAuth(`${API_BASE}/super-admin/dashboard/restaurants`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name })
       });
 
@@ -832,13 +892,9 @@ export default function DineStackAdmin() {
 
   const handleGenerateKey = async (restaurantId: string) => {
     try {
-      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
-      const res = await fetch(`${API_BASE}/super-admin/activation-codes`, {
+      const res = await fetchWithAuth(`${API_BASE}/super-admin/activation-codes`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           restaurantId,
           plan: "Standard",
@@ -878,12 +934,8 @@ export default function DineStackAdmin() {
     if (!keyToDelete) return;
 
     try {
-      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
-      const res = await fetch(`${API_BASE}/super-admin/activation-codes/${keyToDelete}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const res = await fetchWithAuth(`${API_BASE}/super-admin/activation-codes/${keyToDelete}`, {
+        method: 'DELETE'
       });
 
       if (res.ok) {
@@ -907,12 +959,8 @@ export default function DineStackAdmin() {
     if (!restaurantToDelete) return;
 
     try {
-      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
-      const res = await fetch(`${API_BASE}/super-admin/dashboard/restaurants/${restaurantToDelete}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const res = await fetchWithAuth(`${API_BASE}/super-admin/dashboard/restaurants/${restaurantToDelete}`, {
+        method: 'DELETE'
       });
 
       if (res.ok) {
@@ -941,13 +989,9 @@ export default function DineStackAdmin() {
     const newStatus = (currentStatus === 'Suspended' || currentStatus === 'SUSPENDED') ? 'ACTIVE' : 'SUSPENDED';
 
     try {
-      const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
-      const res = await fetch(`${API_BASE}/super-admin/dashboard/restaurants/${restaurantToSuspend}/status`, {
+      const res = await fetchWithAuth(`${API_BASE}/super-admin/dashboard/restaurants/${restaurantToSuspend}/status`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: newStatus,
           reason: newStatus === 'SUSPENDED' ? "Manual suspension by Super Admin" : "Manual reactivation",

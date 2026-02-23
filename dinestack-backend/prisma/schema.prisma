@@ -9,10 +9,33 @@ datasource db {
 
 
 model SuperAdmin {
+  id             String    @id @default(uuid())
+  email          String    @unique
+  passwordHash   String
+  isActive       Boolean   @default(true)
+  failedAttempts Int       @default(0)
+  lockUntil      DateTime?
+  lastLogin      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  refreshTokens  RefreshToken[]
+}
+
+model SuperAdminAuditLog {
   id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
+  adminId   String
+  action    String
+  metadata  String?
   createdAt DateTime @default(now())
+}
+
+model RefreshToken {
+  id        String     @id @default(uuid())
+  tokenHash String     @unique
+  adminId   String
+  admin     SuperAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime   @default(now())
 }
 
 enum RestaurantStatus {

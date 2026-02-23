@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const controller = require("./superAdmin.controller");
-const requireSuperAdmin = require("../middleware/superAdminAuth");
+const { requireSuperAdmin } = require("../auth/auth.middleware");
 
 // Protection: All routes here require Super Admin
 router.use(requireSuperAdmin);

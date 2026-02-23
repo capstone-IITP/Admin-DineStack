@@ -1,4 +1,5 @@
 const express = require("express");
+const cookieParser = require("cookie-parser");
 require("dotenv").config();
 
 const authRoutes = require("./auth/auth.routes");
@@ -75,6 +76,7 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+app.use(cookieParser());
 
 // health check
 app.get("/", (req, res) => {
