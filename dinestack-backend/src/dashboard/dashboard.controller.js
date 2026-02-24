@@ -220,8 +220,9 @@ const deleteRestaurant = async (req, res) => {
                 { name: "Session", sql: `DELETE FROM "Session" WHERE "restaurantId" = $1` },
                 { name: "MenuItem", sql: `DELETE FROM "MenuItem" WHERE "restaurantId" = $1` },
                 { name: "Category", sql: `DELETE FROM "Category" WHERE "restaurantId" = $1` },
+                // TableSession must be deleted before Table (FK constraint)
+                { name: "TableSession", sql: `DELETE FROM "TableSession" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1)` },
                 { name: "Table", sql: `DELETE FROM "Table" WHERE "restaurantId" = $1` },
-                // Add RecoveryCode to list (it's not in Prisma schema but exists in DB)
                 { name: "RecoveryCode", sql: `DELETE FROM "RecoveryCode" WHERE "restaurantId" = $1` }
             ];
 
