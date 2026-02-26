@@ -22,15 +22,19 @@ export function middleware(request: NextRequest) {
         );
     }
 
-    // Extract client IP from x-forwarded-for (first value) or fallback header
-    const forwarded = request.headers.get('x-forwarded-for');
-    const clientIp = forwarded
-        ? forwarded.split(',')[0].trim()
-        : request.headers.get('x-real-ip') || '';
+    // On Vercel Edge, request.ip is the most reliable way to get the client IP
+    // Fallback to Vercel specific header, then standard headers
+    let clientIp = (request as any).ip;
+    if (!clientIp) {
+        const vercelForwarded = request.headers.get('x-vercel-forwarded-for');
+        clientIp = vercelForwarded
+            ? vercelForwarded.split(',')[0].trim()
+            : (request.headers.get('x-forwarded-for')?.split(',')[0].trim() || request.headers.get('x-real-ip') || '');
+    }
 
     if (!clientIp || !allowedIps.includes(clientIp)) {
         return new NextResponse(
-            JSON.stringify({ message: 'Access Denied: IP not whitelisted' }),
+            JSON.stringify({ message: `Access Denied: IP ${clientIp || 'Unknown'} not whitelisted` }),
             { status: 403, headers: { 'Content-Type': 'application/json' } }
         );
     }
