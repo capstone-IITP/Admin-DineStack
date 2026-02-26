@@ -16,7 +16,10 @@ export function middleware(request: NextRequest) {
 
     // If no IPs configured, block everything (fail-closed)
     if (allowedIps.length === 0) {
-        return new NextResponse('Access Denied', { status: 403 });
+        return new NextResponse(
+            JSON.stringify({ message: 'Access Denied: No IPs configured' }),
+            { status: 403, headers: { 'Content-Type': 'application/json' } }
+        );
     }
 
     // Extract client IP from x-forwarded-for (first value) or fallback header
@@ -26,7 +29,10 @@ export function middleware(request: NextRequest) {
         : request.headers.get('x-real-ip') || '';
 
     if (!clientIp || !allowedIps.includes(clientIp)) {
-        return new NextResponse('Access Denied', { status: 403 });
+        return new NextResponse(
+            JSON.stringify({ message: 'Access Denied: IP not whitelisted' }),
+            { status: 403, headers: { 'Content-Type': 'application/json' } }
+        );
     }
 
     // IP is whitelisted — continue normally
