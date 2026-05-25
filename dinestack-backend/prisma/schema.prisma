@@ -12,6 +12,8 @@ model SuperAdmin {
   id                   String    @id @default(uuid())
   email                String    @unique
   passwordHash         String
+  role                 String    @default("MANAGER")
+  lastActive           DateTime?
   isActive             Boolean   @default(true)
   failedAttempts       Int       @default(0)
   lockUntil            DateTime?
@@ -44,6 +46,8 @@ model RefreshToken {
   adminId   String
   admin     SuperAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
   expiresAt DateTime
+  ipAddress String?
+  userAgent String?
   createdAt DateTime   @default(now())
 }
 
@@ -87,6 +91,8 @@ model Restaurant {
   activationCode       ActivationCode?
   createdAt            DateTime         @default(now())
   devices              Device[]
+  payments             Payment[]
+  couponUsages         CouponUsage[]
 }
 
 model Device {
@@ -108,5 +114,42 @@ model AuditLog {
   user      String
   target    String
   details   String
+  severity  String   @default("INFO")
   timestamp DateTime @default(now())
+}
+
+model Coupon {
+  id              String         @id @default(uuid())
+  code            String         @unique
+  discountType    String         // PERCENTAGE, FLAT
+  discountValue   Float
+  status          String         @default("ACTIVE") // ACTIVE, EXPIRED, DISABLED
+  expiresAt       DateTime?      // Null for never-expire
+  usageCount      Int            @default(0)
+  maxUsage        Int?           // Null for unlimited
+  createdAt       DateTime       @default(now())
+  usages          CouponUsage[]
+}
+
+model CouponUsage {
+  id            String      @id @default(uuid())
+  couponId      String
+  coupon        Coupon      @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  restaurantId  String
+  restaurant    Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  usedAt        DateTime    @default(now())
+  @@unique([couponId, restaurantId]) // One-time per restaurant usage
+}
+
+model Payment {
+  id             String     @id @default(uuid())
+  restaurantId   String
+  restaurant     Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  amount         Float
+  currency       String     @default("USD")
+  status         String     @default("PENDING") // SUCCESS, PENDING, FAILED, REFUNDED
+  transactionId  String     @unique
+  invoiceRef     String     @unique
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 }

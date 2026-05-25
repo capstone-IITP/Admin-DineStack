@@ -146,7 +146,7 @@ exports.loginSuperAdmin = async (req, res) => {
 
         // Generate access token (short-lived)
         const accessToken = jwt.sign(
-            { adminId: admin.id, role: "SUPER_ADMIN" },
+            { adminId: admin.id, role: "SUPER_ADMIN", subRole: admin.role },
             process.env.JWT_SECRET,
             { expiresIn: ACCESS_TOKEN_EXPIRY }
         );
@@ -156,33 +156,43 @@ exports.loginSuperAdmin = async (req, res) => {
         const refreshTokenHash = hashToken(rawRefreshToken);
         const refreshExpiresAt = new Date(Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
-        // Clean up old refresh tokens for this admin (optional: keep max 5)
+        // Clean up expired refresh tokens first (avoid deleting other active devices!)
         await prisma.refreshToken.deleteMany({
-            where: { adminId: admin.id }
-        });
+            where: {
+                OR: [
+                    { expiresAt: { lt: new Date() } },
+                    { adminId: admin.id, expiresAt: { lt: new Date() } } // cleanup helper
+                ]
+            }
+        }).catch(err => console.error("Clean expired tokens failed:", err));
 
-        // Store hashed refresh token
+        // Store hashed refresh token along with metadata
         await prisma.refreshToken.create({
             data: {
                 tokenHash: refreshTokenHash,
                 adminId: admin.id,
-                expiresAt: refreshExpiresAt
+                expiresAt: refreshExpiresAt,
+                ipAddress: req.ip || req.headers["x-forwarded-for"] || "127.0.0.1",
+                userAgent: req.headers["user-agent"] || "unknown"
             }
         });
 
-        await logAudit(admin.id, "LOGIN_SUCCESS", null);
+        await logAudit(admin.id, "LOGIN_SUCCESS", {
+            ip: req.ip || req.headers["x-forwarded-for"] || "127.0.0.1",
+            userAgent: req.headers["user-agent"] || "unknown"
+        });
 
         // Set tokens in httpOnly cookies
         res.cookie("access_token", accessToken, getAccessCookieOptions());
         res.cookie("refresh_token", rawRefreshToken, getRefreshCookieOptions());
 
         // Return access token in body (for Authorization header usage)
-        // Refresh token is NEVER returned in the JSON body — only via cookie
         res.json({
             token: accessToken,
             admin: {
                 id: admin.id,
-                email: admin.email
+                email: admin.email,
+                role: admin.role
             }
         });
     } catch (err) {
@@ -250,13 +260,15 @@ exports.refreshToken = async (req, res) => {
             data: {
                 tokenHash: newRefreshTokenHash,
                 adminId: storedToken.adminId,
-                expiresAt: newExpiresAt
+                expiresAt: newExpiresAt,
+                ipAddress: req.ip || req.headers["x-forwarded-for"] || "127.0.0.1",
+                userAgent: req.headers["user-agent"] || "unknown"
             }
         });
 
         // Generate new access token
         const accessToken = jwt.sign(
-            { adminId: storedToken.adminId, role: "SUPER_ADMIN" },
+            { adminId: storedToken.adminId, role: "SUPER_ADMIN", subRole: storedToken.admin.role },
             process.env.JWT_SECRET,
             { expiresIn: ACCESS_TOKEN_EXPIRY }
         );
@@ -268,7 +280,6 @@ exports.refreshToken = async (req, res) => {
         res.cookie("refresh_token", newRawRefreshToken, getRefreshCookieOptions());
 
         // Return access token in body (for Authorization header usage)
-        // Refresh token is NEVER in the body
         res.json({
             token: accessToken,
             message: "Token refreshed"
@@ -312,6 +323,133 @@ exports.logoutSuperAdmin = async (req, res) => {
         res.json({ message: "Logged out successfully" });
     } catch (err) {
         console.error("Logout error:", err);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+// --- Session Management ---
+
+// GET /super-admin/sessions
+exports.getActiveSessions = async (req, res) => {
+    try {
+        const currentUser = req.user;
+        let where = {};
+        
+        // If not OWNER, only show current user's sessions
+        if (currentUser.role !== "OWNER") {
+            where.adminId = currentUser.id;
+        } else if (req.query.adminId) {
+            // OWNER can filter by adminId
+            where.adminId = req.query.adminId;
+        }
+
+        const sessions = await prisma.refreshToken.findMany({
+            where,
+            include: {
+                admin: {
+                    select: {
+                        email: true,
+                        role: true
+                    }
+                }
+            },
+            orderBy: { createdAt: "desc" }
+        });
+
+        const formatted = sessions.map(s => ({
+            id: s.id,
+            adminId: s.adminId,
+            email: s.admin.email,
+            role: s.admin.role,
+            createdAt: s.createdAt,
+            expiresAt: s.expiresAt,
+            ipAddress: s.ipAddress || "unknown",
+            userAgent: s.userAgent || "unknown",
+            isCurrent: req.cookies?.refresh_token ? hashToken(req.cookies.refresh_token) === s.tokenHash : false
+        }));
+
+        res.json(formatted);
+    } catch (err) {
+        console.error("Get active sessions error:", err);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+// POST /super-admin/sessions/revoke
+exports.revokeSession = async (req, res) => {
+    try {
+        const { sessionId } = req.body;
+        const currentUser = req.user;
+
+        if (!sessionId) {
+            return res.status(400).json({ message: "Session ID required" });
+        }
+
+        const session = await prisma.refreshToken.findUnique({
+            where: { id: sessionId },
+            include: { admin: true }
+        });
+
+        if (!session) {
+            return res.status(404).json({ message: "Session not found" });
+        }
+
+        // Restrict non-owners to their own sessions
+        if (currentUser.role !== "OWNER" && session.adminId !== currentUser.id) {
+            return res.status(403).json({ message: "Unauthorized to revoke this session" });
+        }
+
+        await prisma.refreshToken.delete({
+            where: { id: sessionId }
+        });
+
+        await logAudit(currentUser.id, "SESSION_REVOKE", {
+            targetAdminId: session.adminId,
+            targetEmail: session.admin.email,
+            ip: session.ipAddress
+        });
+
+        res.json({ success: true, message: "Session revoked successfully" });
+    } catch (err) {
+        console.error("Revoke session error:", err);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+// POST /super-admin/sessions/revoke-all
+exports.revokeAllSessions = async (req, res) => {
+    try {
+        const { adminId } = req.body;
+        const currentUser = req.user;
+        
+        let targetAdminId = adminId || currentUser.id;
+
+        // Restrict non-owners to their own sessions
+        if (currentUser.role !== "OWNER" && targetAdminId !== currentUser.id) {
+            return res.status(403).json({ message: "Unauthorized to revoke sessions for this user" });
+        }
+
+        const targetUser = await prisma.superAdmin.findUnique({
+            where: { id: targetAdminId }
+        });
+
+        if (!targetUser) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        // Delete all active refresh tokens for the target user
+        await prisma.refreshToken.deleteMany({
+            where: { adminId: targetAdminId }
+        });
+
+        await logAudit(currentUser.id, "SESSION_REVOKE_ALL", {
+            targetAdminId,
+            targetEmail: targetUser.email
+        });
+
+        res.json({ success: true, message: "All sessions revoked successfully" });
+    } catch (err) {
+        console.error("Revoke all sessions error:", err);
         res.status(500).json({ message: "Server error" });
     }
 };

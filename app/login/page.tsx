@@ -229,10 +229,10 @@ export default function LoginPage() {
                                     type="text"
                                     required
                                     value={otp}
-                                    onChange={(e) => setOtp(e.target.value.replace(/\s/g, ''))}
+                                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                                     className="w-full bg-[#FFFFF0] border border-[#1F1F1F] px-4 py-4 font-mono text-2xl text-center tracking-[0.5em] placeholder:text-gray-300 placeholder:tracking-[0.3em] placeholder:text-base focus:outline-none focus:border-[#8D0B41] focus:shadow-[2px_2px_0px_0px_#8D0B41] transition-all"
                                     placeholder="000000"
-                                    maxLength={20}
+                                    maxLength={6}
                                     autoFocus
                                     autoComplete="one-time-code"
                                 />

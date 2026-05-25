@@ -43,6 +43,16 @@ exports.createActivationCode = async (req, res) => {
             },
         });
 
+        await prisma.auditLog.create({
+            data: {
+                action: 'KEY_GENERATE',
+                user: req.user.email,
+                target: `Restaurant:${restaurantId}`,
+                details: `Generated activation code ${code} for plan ${plan}`,
+                severity: 'INFO'
+            }
+        });
+
         res.status(201).json(activationCode);
     } catch (error) {
         console.error(error);
@@ -69,11 +79,29 @@ exports.getAllActivationCodes = async (req, res) => {
 exports.deleteActivationCode = async (req, res) => {
     try {
         const { id } = req.params;
-        await prisma.activationCode.delete({ where: { id } });
-        res.json({ message: "Activation code deleted successfully" });
+        const code = await prisma.activationCode.findUnique({ where: { id } });
+        if (!code) {
+            return res.status(404).json({ message: "Activation code not found" });
+        }
+        await prisma.activationCode.update({
+            where: { id },
+            data: { status: "INVALIDATED" }
+        });
+
+        await prisma.auditLog.create({
+            data: {
+                action: 'KEY_INVALIDATE',
+                user: req.user.email,
+                target: `ActivationCode:${code.code}`,
+                details: `Invalidated activation key for restaurant ID ${code.restaurantId}`,
+                severity: 'CRITICAL'
+            }
+        });
+
+        res.json({ message: "Activation code invalidated successfully" });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: "Failed to delete activation code" });
+        res.status(500).json({ message: "Failed to invalidate activation code" });
     }
 };
 

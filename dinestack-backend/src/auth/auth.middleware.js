@@ -74,7 +74,16 @@ exports.requireSuperAdmin = async (req, res, next) => {
         // 5. Attach admin info to request
         req.superAdmin = decoded;
         req.user = admin; // Full admin record for controllers needing admin.email etc.
-        req.userRole = "SUPER_ADMIN";
+        req.userRole = admin.role;
+
+        // Throttled non-blocking lastActive update
+        if (!admin.lastActive || (Date.now() - new Date(admin.lastActive).getTime() > 60 * 1000)) {
+            prisma.superAdmin.update({
+                where: { id: admin.id },
+                data: { lastActive: new Date() }
+            }).catch(err => console.error("Failed to update lastActive:", err.message));
+        }
+
         next();
     } catch (err) {
         console.error("Auth middleware error:", err);
@@ -83,4 +92,29 @@ exports.requireSuperAdmin = async (req, res, next) => {
             code: "AUTH_ERROR"
         });
     }
+};
+
+/**
+ * Role-Based Access Control middleware
+ * Restricts access to specified roles.
+ * Must be used after requireSuperAdmin middleware.
+ */
+exports.requireRole = (allowedRoles) => {
+    return (req, res, next) => {
+        if (!req.user) {
+            return res.status(401).json({
+                message: "Authentication required",
+                code: "AUTH_REQUIRED"
+            });
+        }
+
+        if (!allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({
+                message: "Access denied. Insufficient permissions.",
+                code: "ROLE_FORBIDDEN"
+            });
+        }
+
+        next();
+    };
 };

@@ -54,8 +54,8 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         }
 
         try {
-            // Validate token with backend
-            const res = await fetch(`${API_BASE}/super-admin/dashboard/stats`, {
+            // Validate token with backend verify endpoint
+            const res = await fetch(`${API_BASE}/super-admin/verify`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -64,7 +64,11 @@ export default function AuthGuard({ children }: AuthGuardProps) {
             });
 
             if (res.ok) {
-                // Token is valid
+                // Token is valid - parse data to sync admin info/role
+                const data = await res.json();
+                if (data.admin) {
+                    localStorage.setItem('admin', JSON.stringify(data.admin));
+                }
                 setIsAuthenticated(true);
             } else if (res.status === 401 || res.status === 403) {
                 // Token invalid or expired
@@ -77,10 +81,9 @@ export default function AuthGuard({ children }: AuthGuardProps) {
                 setIsAuthenticated(true);
             }
         } catch (error) {
-            // Server unreachable - do NOT logout, just log error
-            console.error('[AuthGuard] Server unreachable:', error);
+            // Server unreachable - do NOT logout, just log warning
+            console.warn('[AuthGuard] Server unreachable:', error);
             // Allow access if we have a token but server is down (optimistic)
-            // Or show a connection error toast (future improvement)
             setIsAuthenticated(true);
             return;
         } finally {

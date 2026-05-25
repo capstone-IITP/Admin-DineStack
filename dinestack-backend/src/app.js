@@ -83,6 +83,7 @@ app.get("/", (req, res) => {
     res.json({ message: "DineStack Backend is running on Vercel" });
 });
 
+
 app.get("/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date() });
 });
@@ -95,14 +96,24 @@ app.get("/api/health", (req, res) => {
 // -----------------------------------------------------------------------------
 // SUPER ADMIN ROUTES (Management Portal)
 // -----------------------------------------------------------------------------
+const couponRoutes = require("./coupon/coupon.routes");
+const paymentRoutes = require("./payment/payment.routes");
+const teamRoutes = require("./team/team.routes");
+
 app.use("/super-admin", authRoutes); // Auth (Login)
 app.use("/super-admin/dashboard", dashboardRoutes); // Dashboard Stats
 app.use("/super-admin/activation-codes", activationRoutes); // Code Management
+app.use("/super-admin/coupons", couponRoutes);
+app.use("/super-admin/payments", paymentRoutes);
+app.use("/super-admin/team", teamRoutes);
 
 // Support /api/super-admin prefix for Vercel rewrites
 app.use("/api/super-admin", authRoutes);
 app.use("/api/super-admin/dashboard", dashboardRoutes);
 app.use("/api/super-admin/activation-codes", activationRoutes);
+app.use("/api/super-admin/coupons", couponRoutes);
+app.use("/api/super-admin/payments", paymentRoutes);
+app.use("/api/super-admin/team", teamRoutes);
 
 // New Super Admin Access Management Routes
 // Implements implementation level plan for /api/super-admin/* endpoints
