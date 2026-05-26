@@ -20,11 +20,11 @@ export const fetchWithAuth = async (url: string, options: RequestInit = {}): Pro
 
   let res = await fetch(url, mergedOptions);
 
-  // If token expired, attempt refresh once via cookies
+  // If token expired or is missing, attempt refresh once via cookies
   if (res.status === 401) {
     const clone = res.clone();
     const body = await clone.json().catch(() => ({}));
-    if (body.code === 'TOKEN_EXPIRED') {
+    if (body.code === 'TOKEN_EXPIRED' || body.code === 'TOKEN_MISSING') {
       const apiBase = getApiBase();
       const refreshRes = await fetch(`${apiBase}/super-admin/refresh`, {
         method: 'POST',

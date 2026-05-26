@@ -18,8 +18,7 @@ function getRefreshCookieOptions() {
         httpOnly: true,
         secure: isProduction,
         sameSite: "strict",
-        path: "/",
-        maxAge: REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000 // 7 days in ms
+        path: "/"
     };
 }
 
