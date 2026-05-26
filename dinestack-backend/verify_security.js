@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').resolve(__dirname, '.env') });
 const { PrismaClient } = require('@prisma/client');
 const p = new PrismaClient();
 
@@ -12,9 +12,9 @@ async function verify() {
     console.log('lockUntil:', a.lockUntil);
 
     console.log('\n=== Audit Logs ===');
-    const l = await p.superAdminAuditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 10 });
+    const l = await p.auditLog.findMany({ orderBy: { timestamp: 'desc' }, take: 10 });
     console.log('Total entries:', l.length);
-    l.forEach(x => console.log(' ', x.action, x.metadata || ''));
+    l.forEach(x => console.log(' ', x.action, x.actor, x.metadata || ''));
 
     console.log('\n=== Resetting lock ===');
     await p.superAdmin.updateMany({ data: { failedAttempts: 0, lockUntil: null } });

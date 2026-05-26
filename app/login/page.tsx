@@ -71,8 +71,7 @@ export default function LoginPage() {
                 return;
             }
 
-            // No 2FA — normal login
-            localStorage.setItem("SUPER_ADMIN_TOKEN", data.token);
+            // No 2FA — normal login (rely on httpOnly cookies)
             localStorage.setItem("admin", JSON.stringify(data.admin));
             router.push("/");
         } catch (err: any) {
@@ -130,8 +129,7 @@ export default function LoginPage() {
                 throw new Error(data.message || "Verification failed");
             }
 
-            // Success — store auth data
-            localStorage.setItem("SUPER_ADMIN_TOKEN", data.token);
+            // Success — store admin details (rely on httpOnly cookies)
             localStorage.setItem("admin", JSON.stringify(data.admin));
             router.push("/");
         } catch (err: any) {

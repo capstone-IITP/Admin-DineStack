@@ -45,7 +45,7 @@ exports.createCoupon = async (req, res) => {
         await prisma.auditLog.create({
             data: {
                 action: 'COUPON_CREATE',
-                user: req.user.email,
+                actor: req.user.email,
                 target: `Coupon:${coupon.id}`,
                 details: `Created coupon ${coupon.code} (${discountType}: ${discountValue})`,
                 severity: 'WARNING'
@@ -83,7 +83,7 @@ exports.updateCouponStatus = async (req, res) => {
         await prisma.auditLog.create({
             data: {
                 action: 'COUPON_STATUS_CHANGE',
-                user: req.user.email,
+                actor: req.user.email,
                 target: `Coupon:${coupon.id}`,
                 details: `Updated coupon ${coupon.code} status to ${status}`,
                 severity: 'WARNING'

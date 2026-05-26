@@ -186,9 +186,8 @@ exports.loginSuperAdmin = async (req, res) => {
         res.cookie("access_token", accessToken, getAccessCookieOptions());
         res.cookie("refresh_token", rawRefreshToken, getRefreshCookieOptions());
 
-        // Return access token in body (for Authorization header usage)
+        // Return admin info in body (no raw token exposed)
         res.json({
-            token: accessToken,
             admin: {
                 id: admin.id,
                 email: admin.email,
@@ -279,9 +278,8 @@ exports.refreshToken = async (req, res) => {
         res.cookie("access_token", accessToken, getAccessCookieOptions());
         res.cookie("refresh_token", newRawRefreshToken, getRefreshCookieOptions());
 
-        // Return access token in body (for Authorization header usage)
+        // Return success message (no raw token exposed)
         res.json({
-            token: accessToken,
             message: "Token refreshed"
         });
     } catch (err) {

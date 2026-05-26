@@ -87,7 +87,7 @@ exports.createTeamMember = async (req, res) => {
         await prisma.auditLog.create({
             data: {
                 action: "TEAM_CREATE",
-                user: req.user.email,
+                actor: req.user.email,
                 target: `SuperAdmin:${newMember.id}`,
                 details,
                 severity: "SECURITY"
@@ -210,7 +210,7 @@ exports.updateTeamMember = async (req, res) => {
         await prisma.auditLog.create({
             data: {
                 action: "TEAM_UPDATE",
-                user: req.user.email,
+                actor: req.user.email,
                 target: `SuperAdmin:${id}`,
                 details: actionDetails,
                 severity: "SECURITY"
@@ -257,7 +257,7 @@ exports.deleteTeamMember = async (req, res) => {
         await prisma.auditLog.create({
             data: {
                 action: "TEAM_DELETE",
-                user: req.user.email,
+                actor: req.user.email,
                 target: `SuperAdmin:${id}`,
                 details,
                 severity: "SECURITY"

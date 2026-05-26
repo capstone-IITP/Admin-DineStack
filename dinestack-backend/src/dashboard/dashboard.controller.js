@@ -84,14 +84,14 @@ const getRestaurants = async (req, res) => {
 const getKeys = async (req, res) => {
     try {
         const keys = await prisma.activationCode.findMany({
-            include: { restaurant: true }
+            include: { Restaurant: true }
         });
 
         const formatted = keys.map(k => ({
             id: k.id,
             code: k.code,
-            restaurant: k.restaurant ? k.restaurant.name : (k.entityName || "Unassigned"),
-            entityId: k.restaurant ? k.restaurant.id : null, // Add entity ID
+            restaurant: k.Restaurant ? k.Restaurant.name : (k.entityName || "Unassigned"),
+            entityId: k.Restaurant ? k.Restaurant.id : null, // Add entity ID
             status: k.isUsed ? "Used" : (new Date(k.expiresAt) < new Date() ? "Expired" : "Unused"),
             created: k.createdAt.toISOString().split('T')[0],
             boundTo: k.isUsed ? "Bound" : null
@@ -110,11 +110,11 @@ const getDevices = async (req, res) => {
         });
 
         const formatted = devices.map(d => ({
-            hash: d.hash,
+            hash: d.deviceId || d.id,
             restaurant: d.restaurant.name,
             type: d.type,
             status: d.status,
-            lastSeen: d.lastSeen.toLocaleString()
+            lastSeen: d.lastSeen.toISOString()
         }));
 
         res.json(formatted);
@@ -152,7 +152,7 @@ const getLogs = async (req, res) => {
         }
         if (search) {
             where.OR = [
-                { user: { contains: search, mode: "insensitive" } },
+                { actor: { contains: search, mode: "insensitive" } },
                 { target: { contains: search, mode: "insensitive" } },
                 { details: { contains: search, mode: "insensitive" } },
                 { action: { contains: search, mode: "insensitive" } }
@@ -184,9 +184,9 @@ const getLogs = async (req, res) => {
         const formatted = logs.map(l => ({
             id: l.id,
             action: l.action,
-            user: l.user,
+            user: l.actor,
             target: l.target,
-            timestamp: l.timestamp.toLocaleString(),
+            timestamp: l.timestamp.toISOString(),
             details: l.details,
             severity: l.severity
         }));
@@ -282,7 +282,7 @@ const deleteRestaurant = async (req, res) => {
             await tx.auditLog.create({
                 data: {
                     action: 'ENTITY_DELETE_SOFT',
-                    user: req.user.email,
+                    actor: req.user.email,
                     target: `Restaurant:${id}`,
                     details: `Soft deleted restaurant "${restaurant.name}" (Revoked access)`,
                     severity: 'CRITICAL'
@@ -345,7 +345,7 @@ const updateRestaurantStatus = async (req, res) => {
             await tx.auditLog.create({
                 data: {
                     action: 'STATUS_CHANGE',
-                    user: req.user.email,
+                    actor: req.user.email,
                     target: `Restaurant:${id}`,
                     details: `Updated status of restaurant "${updatedRest.name}" to ${status}. Reason: ${reason || "None specified"}.`,
                     severity: (status === 'REVOKED' || status === 'SUSPENDED') ? 'CRITICAL' : 'WARNING'

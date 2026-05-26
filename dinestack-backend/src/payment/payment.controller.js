@@ -95,7 +95,7 @@ exports.refundPayment = async (req, res) => {
         await prisma.auditLog.create({
             data: {
                 action: "PAYMENT_REFUND",
-                user: req.user.email,
+                actor: req.user.email,
                 target: `Payment:${id}`,
                 details: details,
                 severity: "CRITICAL"

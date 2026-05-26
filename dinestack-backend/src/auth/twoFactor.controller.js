@@ -62,15 +62,21 @@ function getAccessCookieOptions() {
  */
 async function logSecurityEvent(adminId, action, req, metadata = null) {
     try {
-        await prisma.superAdminAuditLog.create({
+        const admin = await prisma.superAdmin.findUnique({
+            where: { id: adminId },
+            select: { email: true }
+        });
+        const actor = admin ? admin.email : adminId;
+
+        await prisma.auditLog.create({
             data: {
-                adminId,
+                actor,
                 action,
-                metadata: JSON.stringify({
-                    ...metadata,
-                    ip: req.ip || req.headers["x-forwarded-for"] || "unknown",
-                    userAgent: req.headers["user-agent"] || "unknown"
-                })
+                severity: "SECURITY",
+                details: `Security Event: ${action}`,
+                ipAddress: req.ip || req.headers["x-forwarded-for"] || "unknown",
+                userAgent: req.headers["user-agent"] || "unknown",
+                metadata: metadata ? (typeof metadata === "string" ? JSON.parse(metadata) : metadata) : null
             }
         });
     } catch (err) {
@@ -410,7 +416,6 @@ exports.verifyLogin2FA = async (req, res) => {
         res.cookie("refresh_token", rawRefreshToken, getRefreshCookieOptions());
 
         res.json({
-            token: accessToken,
             admin: {
                 id: admin.id,
                 email: admin.email,
