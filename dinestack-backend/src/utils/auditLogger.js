@@ -1,21 +1,23 @@
-/**
- * Super Admin Audit Logger
- * 
- * Logs security-relevant actions to SuperAdminAuditLog table.
- * Actions: LOGIN_SUCCESS, LOGIN_FAILURE, ACCOUNT_LOCKED,
- *          PASSWORD_CHANGE, LICENSE_CREATE, LICENSE_REVOKE,
- *          FORCE_RESET, TOKEN_REFRESH, LOGOUT
- */
-
 const prisma = require('../prisma');
 
-async function logAudit(adminId, action, metadata = null) {
+async function logAudit(actorIdOrEmail, action, metadata = null, severity = "INFO", details = "") {
     try {
-        await prisma.superAdminAuditLog.create({
+        let actor = actorIdOrEmail;
+        if (actorIdOrEmail && actorIdOrEmail.length === 36) {
+            const admin = await prisma.superAdmin.findUnique({
+                where: { id: actorIdOrEmail },
+                select: { email: true }
+            });
+            if (admin) actor = admin.email;
+        }
+
+        await prisma.auditLog.create({
             data: {
-                adminId,
+                actor: actor || "SYSTEM",
                 action,
-                metadata: metadata ? JSON.stringify(metadata) : null
+                severity,
+                details: details || `Performed ${action}`,
+                metadata: metadata ? (typeof metadata === "string" ? JSON.parse(metadata) : metadata) : null
             }
         });
     } catch (err) {

@@ -1,15 +1,74 @@
 const express = require("express");
 const cookieParser = require("cookie-parser");
+const crypto = require("crypto");
+const helmet = require("helmet");
+const winston = require("winston");
+const { v4: uuidv4 } = require("uuid");
+const prisma = require("./prisma");
 require("dotenv").config();
+
+// Sentry Observability Integration
+const Sentry = require("@sentry/node");
+if (process.env.SENTRY_DSN) {
+    Sentry.init({
+        dsn: process.env.SENTRY_DSN,
+        tracesSampleRate: 1.0,
+    });
+    console.log("✅ Sentry initialized successfully.");
+}
+
+// Winston Structured Logger
+const logger = winston.createLogger({
+    level: "info",
+    format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.json()
+    ),
+    transports: [new winston.transports.Console()]
+});
 
 const authRoutes = require("./auth/auth.routes");
 const dashboardRoutes = require("./dashboard/dashboard.routes");
 const activationRoutes = require("./activation/activation.routes");
 const deviceRoutes = require("./activation/device.routes");
+const couponRoutes = require("./coupon/coupon.routes");
+const paymentRoutes = require("./payment/payment.routes");
+const teamRoutes = require("./team/team.routes");
+const superAdminRoutes = require("./dashboard/superAdmin.routes");
 
 const app = express();
 
-// Allowed origins for CORS - configurable via environment variable
+// 1. CSP Nonce Generation Middleware
+app.use((req, res, next) => {
+    res.locals.cspNonce = crypto.randomBytes(16).toString("base64");
+    next();
+});
+
+// 2. Global Security Headers (Helmet)
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", (req, res) => `'nonce-${res.locals.cspNonce}'`],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com"],
+            imgSrc: ["'self'", "data:", "https://admin-dinestack.vercel.app"],
+            frameAncestors: ["'none'"],
+            objectSrc: ["'none'"],
+            upgradeInsecureRequests: [],
+        },
+    },
+    crossOriginEmbedderPolicy: false,
+    frameguard: { action: "deny" },
+    referrerPolicy: { policy: "strict-origin" },
+    hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true
+    }
+}));
+
+// 3. Strict CORS configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
     : [
@@ -18,38 +77,14 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
         "https://admin.dinestack.in"
     ];
 
-// Check if origin is allowed (supports Vercel preview deployments and custom domains)
 function isOriginAllowed(origin) {
-    // Allow server-to-server requests (no origin header)
-    if (!origin) return true;
-
-    // Exact match for known origins
-    if (allowedOrigins.includes(origin)) return true;
-
-    // Allow all Vercel preview deployments for admin-dinestack
-    // Pattern: https://admin-dinestack-*.vercel.app
-    if (origin.match(/^https:\/\/admin-dinestack(-[a-z0-9]+)*\.vercel\.app$/)) {
-        return true;
-    }
-
-    // Allow dinestack.in subdomains (e.g., admin.dinestack.in, app.dinestack.in)
-    if (origin.match(/^https:\/\/[a-z0-9-]+\.dinestack\.in$/)) {
-        return true;
-    }
-
-    // Allow all localhost ports for development
-    if (origin.match(/^http:\/\/localhost:\d+$/)) {
-        return true;
-    }
-
-    return false;
+    if (!origin) return false; // Reject empty origins in production
+    return allowedOrigins.includes(origin);
 }
 
-// Dynamic CORS middleware
 app.use((req, res, next) => {
     const origin = req.headers.origin;
 
-    // Allow server-to-server / curl requests (no origin header)
     if (!origin) {
         return next();
     }
@@ -60,7 +95,6 @@ app.use((req, res, next) => {
         res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
         res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
 
-        // Handle OPTIONS preflight requests (CRITICAL for POST requests)
         if (req.method === "OPTIONS") {
             return res.sendStatus(200);
         }
@@ -70,66 +104,86 @@ app.use((req, res, next) => {
 
     console.error("CORS blocked origin:", origin);
     return res.status(403).json({
-        error: "CORS blocked",
-        origin
+        error: "CORS blocked"
     });
 });
 
 app.use(express.json());
 app.use(cookieParser());
 
-// health check
-app.get("/", (req, res) => {
-    res.json({ message: "DineStack Backend is running on Vercel" });
+// 4. Database-ping Health Check Endpoints
+app.get("/", async (req, res) => {
+    try {
+        await prisma.$queryRaw`SELECT 1`;
+        res.json({ message: "DineStack Backend is running on Vercel" });
+    } catch (err) {
+        res.status(503).json({ error: "Database offline" });
+    }
 });
 
-app.get("/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date() });
+app.get("/health", async (req, res) => {
+    try {
+        await prisma.$queryRaw`SELECT 1`;
+        res.json({ status: "ok", timestamp: new Date().toISOString(), database: "connected" });
+    } catch (err) {
+        logger.error("Health check failed:", { error: err.message });
+        res.status(503).json({ status: "error", error: "Database unavailable" });
+    }
 });
 
-// Health check at /api/health for standardized endpoint
-app.get("/api/health", (req, res) => {
-    res.json({ status: "OK", timestamp: new Date().toISOString() });
+app.get("/api/health", async (req, res) => {
+    try {
+        await prisma.$queryRaw`SELECT 1`;
+        res.json({ status: "OK", timestamp: new Date().toISOString(), database: "connected" });
+    } catch (err) {
+        logger.error("API Health check failed:", { error: err.message });
+        res.status(503).json({ status: "ERROR", error: "Database unavailable" });
+    }
 });
 
-// -----------------------------------------------------------------------------
-// SUPER ADMIN ROUTES (Management Portal)
-// -----------------------------------------------------------------------------
-app.use("/super-admin", authRoutes); // Auth (Login)
-app.use("/super-admin/dashboard", dashboardRoutes); // Dashboard Stats
-app.use("/super-admin/activation-codes", activationRoutes); // Code Management
+// 5. Routers
+app.use("/super-admin", authRoutes); 
+app.use("/super-admin/dashboard", dashboardRoutes); 
+app.use("/super-admin/activation-codes", activationRoutes); 
+app.use("/super-admin/coupons", couponRoutes);
+app.use("/super-admin/payments", paymentRoutes);
+app.use("/super-admin/team", teamRoutes);
 
-// Support /api/super-admin prefix for Vercel rewrites
 app.use("/api/super-admin", authRoutes);
 app.use("/api/super-admin/dashboard", dashboardRoutes);
 app.use("/api/super-admin/activation-codes", activationRoutes);
+app.use("/api/super-admin/coupons", couponRoutes);
+app.use("/api/super-admin/payments", paymentRoutes);
+app.use("/api/super-admin/team", teamRoutes);
 
-// New Super Admin Access Management Routes
-// Implements implementation level plan for /api/super-admin/* endpoints
-const superAdminRoutes = require("./dashboard/superAdmin.routes");
 app.use("/api/super-admin", superAdminRoutes);
-
-
-// -----------------------------------------------------------------------------
-// DEVICE ROUTES (Restaurant Tablet)
-// -----------------------------------------------------------------------------
-// Public endpoints for device onboarding and operations
-// strictly separate from admin routes.
 app.use("/api", deviceRoutes);
 
-// Global error handler - ensures JSON responses only
+// 6. Global Error Handler - Scrubs Stack Traces in Production
 app.use((err, req, res, next) => {
-    console.error("Unhandled error:", err);
+    const trackingId = uuidv4();
+    
+    // Structured Logging
+    logger.error("Unhandled exception occurred", {
+        trackingId,
+        message: err.message,
+        stack: err.stack,
+        url: req.originalUrl,
+        method: req.method,
+        ip: req.ip || req.headers["x-forwarded-for"]
+    });
+
+    const isProduction = process.env.NODE_ENV === "production";
+
     res.status(err.status || 500).json({
-        error: err.message || "Internal server error",
-        code: err.code || "INTERNAL_ERROR"
+        error: isProduction ? "Internal Server Error" : (err.message || "Internal Server Error"),
+        code: err.code || "INTERNAL_ERROR",
+        trackingId
     });
 });
 
-// 404 catch-all - always returns JSON
 app.use((req, res) => {
     res.status(404).json({ error: "Route not found", path: req.originalUrl });
 });
 
 module.exports = app;
-

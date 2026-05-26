@@ -37,7 +37,7 @@ export default function TwoFactorSettings({ apiBase, fetchWithAuth }: TwoFactorS
                 setBackupCodesRemaining(data.backupCodesRemaining || 0);
             }
         } catch (err) {
-            console.error("Failed to fetch 2FA status:", err);
+            console.warn("Failed to fetch 2FA status:", err);
         }
     }, [apiBase, fetchWithAuth]);
 

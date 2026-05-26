@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "concurrently -k -p \"[{name}]\" -n \"frontend,backend\" -c \"cyan,magenta\" \"next dev\" \"npm run dev --prefix dinestack-backend\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

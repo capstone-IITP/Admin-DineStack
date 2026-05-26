@@ -71,9 +71,10 @@ exports.revokeRestaurantAccess = async (req, res) => {
             await tx.auditLog.create({
                 data: {
                     action: 'REVOKE_ACCESS',
-                    user: req.user.email,
+                    actor: req.user.email,
                     target: `Restaurant:${id}`,
-                    details: JSON.stringify({ reason, previousStatus: restaurant.status })
+                    details: `Revoked restaurant access. Reason: ${reason}`,
+                    metadata: { reason, previousStatus: restaurant.status }
                 }
             });
 
@@ -123,9 +124,10 @@ exports.reactivateRestaurantAccess = async (req, res) => {
             await tx.auditLog.create({
                 data: {
                     action: 'ACTIVATE_ACCESS',
-                    user: req.user.email,
+                    actor: req.user.email,
                     target: `Restaurant:${id}`,
-                    details: JSON.stringify({ previousStatus: restaurant.status })
+                    details: `Reactivated restaurant access`,
+                    metadata: { previousStatus: restaurant.status }
                 }
             });
 

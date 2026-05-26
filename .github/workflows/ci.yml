@@ -1,0 +1,62 @@
+name: TapTable DineStack CI/CD validation
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  validate-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: dinestack_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Monorepo Dependencies
+        run: npm ci
+
+      - name: Install Backend Dependencies
+        run: npm ci --prefix dinestack-backend
+
+      - name: Verify Prisma Schema Validation
+        run: |
+          npx prisma validate --schema=dinestack-backend/prisma/schema.prisma
+
+      - name: Dry-Run Database Migrations
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/dinestack_test?schema=public
+        run: |
+          npx prisma migrate dev --name ci_dry_run --schema=dinestack-backend/prisma/schema.prisma --create-only
+          npx prisma migrate status --schema=dinestack-backend/prisma/schema.prisma
+
+      - name: Run ESLint Checks
+        run: npm run lint
+
+      - name: Verify Frontend Production Build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:5000
+        run: npm run build

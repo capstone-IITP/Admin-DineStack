@@ -21,17 +21,22 @@ async function main() {
         });
 
         if (existingAdmin) {
-            console.log("✅ Super Admin already exists.");
+            console.log("✅ Super Admin already exists. Ensuring role is OWNER...");
+            await prisma.superAdmin.update({
+                where: { email },
+                data: { role: "OWNER" }
+            });
         } else {
-            console.log("🔨 Creating Super Admin...");
-            const hashedPassword = await bcrypt.hash(password, 10);
+            console.log("🔨 Creating Super Admin as OWNER...");
+            const hashedPassword = await bcrypt.hash(password, 12);
             await prisma.superAdmin.create({
                 data: {
                     email,
-                    password: hashedPassword
+                    passwordHash: hashedPassword,
+                    role: "OWNER"
                 }
             });
-            console.log("✅ Super Admin created successfully.");
+            console.log("✅ Super Admin created successfully as OWNER.");
         }
     } catch (error) {
         console.error("❌ Error during initialization:", error);

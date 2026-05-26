@@ -28,27 +28,39 @@ function getKeyAndIv() {
 }
 
 /**
- * Encrypt plaintext string to hex.
+ * Encrypt plaintext string to hex, using a unique random IV per payload.
+ * Format returned: iv_hex:ciphertext_hex
  * @param {string} text - Plaintext to encrypt
- * @returns {string} Hex-encoded ciphertext
+ * @returns {string} Unique IV and hex-encoded ciphertext joined by colon
  */
 function encrypt(text) {
-    const { key, iv } = getKeyAndIv();
-    const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+    const { key } = getKeyAndIv();
+    const ivBuffer = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv(ALGORITHM, key, ivBuffer);
     let encrypted = cipher.update(text, "utf8", "hex");
     encrypted += cipher.final("hex");
-    return encrypted;
+    return `${ivBuffer.toString("hex")}:${encrypted}`;
 }
 
 /**
  * Decrypt hex ciphertext to plaintext string.
- * @param {string} encryptedHex - Hex-encoded ciphertext
+ * Supports both new 'iv:ciphertext' format and legacy static-IV format.
+ * @param {string} payload - Hex-encoded ciphertext or iv:ciphertext payload
  * @returns {string} Decrypted plaintext
  */
-function decrypt(encryptedHex) {
-    const { key, iv } = getKeyAndIv();
-    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-    let decrypted = decipher.update(encryptedHex, "hex", "utf8");
+function decrypt(payload) {
+    const { key, iv: defaultIv } = getKeyAndIv();
+    let ivBuffer = defaultIv;
+    let encryptedText = payload;
+
+    if (payload.includes(":")) {
+        const parts = payload.split(":");
+        ivBuffer = Buffer.from(parts[0], "hex");
+        encryptedText = parts[1];
+    }
+
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, ivBuffer);
+    let decrypted = decipher.update(encryptedText, "hex", "utf8");
     decrypted += decipher.final("utf8");
     return decrypted;
 }
