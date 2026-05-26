@@ -32,12 +32,15 @@ async function main() {
     });
 
     if (existingAdmin) {
-        console.log("SuperAdmin already exists, updating password...");
+        console.log("SuperAdmin already exists, updating password and role to OWNER...");
         await prisma.superAdmin.update({
             where: { email },
-            data: { passwordHash: hashedPassword },
+            data: { 
+                passwordHash: hashedPassword,
+                role: "OWNER"
+            },
         });
-        console.log("SuperAdmin password updated (bcrypt, 12 rounds).");
+        console.log("SuperAdmin updated successfully.");
         return;
     }
 
@@ -45,6 +48,7 @@ async function main() {
         data: {
             email,
             passwordHash: hashedPassword,
+            role: "OWNER"
         },
     });
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import * as api from "../services/api";
 
 interface AuthGuardProps {
     children: React.ReactNode;
@@ -11,12 +12,9 @@ interface AuthGuardProps {
  * AuthGuard Component
  * 
  * Validates the Super Admin session on every page load:
- * 1. Checks if token exists in localStorage
- * 2. Validates token with backend API
- * 3. Redirects to login if:
- *    - No token exists
- *    - Token is invalid/expired
- *    - Server is unreachable (optional: show error instead)
+ * 1. Checks verification status with backend via cookies
+ * 2. Attempts silent refresh if session is expired
+ * 3. Redirects to login if unauthenticated or refresh fails
  */
 export default function AuthGuard({ children }: AuthGuardProps) {
     const router = useRouter();
@@ -24,11 +22,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     const [isValidating, setIsValidating] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-    // Production: use same-origin (Vercel rewrites handle routing)
-    // Development: use localhost
-    const API_BASE = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-        ? ''  // Same origin for production
-        : (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000');
+    const API_BASE = api.getApiBase();
 
     useEffect(() => {
         // Skip auth check for login page
@@ -44,52 +38,75 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     const validateSession = async () => {
         setIsValidating(true);
 
-        const token = localStorage.getItem('SUPER_ADMIN_TOKEN');
-
-        // No token - redirect to login immediately
-        if (!token) {
-            console.log('[AuthGuard] No token found, redirecting to login');
-            clearSessionAndRedirect();
-            return;
-        }
-
         try {
-            // Validate token with backend
-            const res = await fetch(`${API_BASE}/super-admin/dashboard/stats`, {
+            // Validate session cookies with backend verify endpoint
+            const res = await fetch(`${API_BASE}/super-admin/verify`, {
                 method: 'GET',
+                credentials: 'include',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 }
             });
 
             if (res.ok) {
-                // Token is valid
+                const data = await res.json();
+                if (data.admin) {
+                    localStorage.setItem('admin', JSON.stringify(data.admin));
+                }
                 setIsAuthenticated(true);
             } else if (res.status === 401 || res.status === 403) {
-                // Token invalid or expired
-                console.log('[AuthGuard] Token invalid or expired, redirecting to login');
+                const clone = res.clone();
+                const body = await clone.json().catch(() => ({}));
+                
+                // If token has expired, try a silent refresh
+                if (body.code === 'TOKEN_EXPIRED') {
+                    console.log('[AuthGuard] Token expired. Attempting cookie refresh...');
+                    const refreshRes = await fetch(`${API_BASE}/super-admin/refresh`, {
+                        method: 'POST',
+                        credentials: 'include'
+                    });
+
+                    if (refreshRes.ok) {
+                        // Retry original verification
+                        const retryRes = await fetch(`${API_BASE}/super-admin/verify`, {
+                            method: 'GET',
+                            credentials: 'include'
+                        });
+
+                        if (retryRes.ok) {
+                            const data = await retryRes.json();
+                            if (data.admin) {
+                                localStorage.setItem('admin', JSON.stringify(data.admin));
+                            }
+                            setIsAuthenticated(true);
+                            setIsValidating(false);
+                            return;
+                        }
+                    }
+                }
+
+                console.log('[AuthGuard] Verification failed. Redirecting to login.');
                 clearSessionAndRedirect();
                 return;
             } else {
-                // Other errors - still allow access (could be temporary server issue)
                 console.warn('[AuthGuard] Server returned non-auth error:', res.status);
                 setIsAuthenticated(true);
             }
         } catch (error) {
-            // Server unreachable - do NOT logout, just log error
-            console.error('[AuthGuard] Server unreachable:', error);
-            // Allow access if we have a token but server is down (optimistic)
-            // Or show a connection error toast (future improvement)
-            setIsAuthenticated(true);
-            return;
+            console.warn('[AuthGuard] Server unreachable:', error);
+            // Allow access optimistically if we have profile data, otherwise block
+            if (localStorage.getItem('admin')) {
+                setIsAuthenticated(true);
+            } else {
+                clearSessionAndRedirect();
+                return;
+            }
         } finally {
             setIsValidating(false);
         }
     };
 
     const clearSessionAndRedirect = () => {
-        localStorage.removeItem('SUPER_ADMIN_TOKEN');
         localStorage.removeItem('admin');
         setIsValidating(false);
         setIsAuthenticated(false);

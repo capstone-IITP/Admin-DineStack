@@ -62,15 +62,21 @@ function getAccessCookieOptions() {
  */
 async function logSecurityEvent(adminId, action, req, metadata = null) {
     try {
-        await prisma.superAdminAuditLog.create({
+        const admin = await prisma.superAdmin.findUnique({
+            where: { id: adminId },
+            select: { email: true }
+        });
+        const actor = admin ? admin.email : adminId;
+
+        await prisma.auditLog.create({
             data: {
-                adminId,
+                actor,
                 action,
-                metadata: JSON.stringify({
-                    ...metadata,
-                    ip: req.ip || req.headers["x-forwarded-for"] || "unknown",
-                    userAgent: req.headers["user-agent"] || "unknown"
-                })
+                severity: "SECURITY",
+                details: `Security Event: ${action}`,
+                ipAddress: req.ip || req.headers["x-forwarded-for"] || "unknown",
+                userAgent: req.headers["user-agent"] || "unknown",
+                metadata: metadata ? (typeof metadata === "string" ? JSON.parse(metadata) : metadata) : null
             }
         });
     } catch (err) {
@@ -363,7 +369,7 @@ exports.verifyLogin2FA = async (req, res) => {
 
         // Generate access token
         const accessToken = jwt.sign(
-            { adminId: admin.id, role: "SUPER_ADMIN" },
+            { adminId: admin.id, role: "SUPER_ADMIN", subRole: admin.role },
             process.env.JWT_SECRET,
             { expiresIn: ACCESS_TOKEN_EXPIRY }
         );
@@ -375,34 +381,45 @@ exports.verifyLogin2FA = async (req, res) => {
             Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000
         );
 
-        // Clean up old refresh tokens
+        // Clean up expired refresh tokens first
         await prisma.refreshToken.deleteMany({
-            where: { adminId: admin.id }
-        });
+            where: {
+                OR: [
+                    { expiresAt: { lt: new Date() } },
+                    { adminId: admin.id, expiresAt: { lt: new Date() } }
+                ]
+            }
+        }).catch(err => console.error("Clean expired 2fa tokens failed:", err));
 
-        // Store hashed refresh token
+        // Store hashed refresh token along with metadata
         await prisma.refreshToken.create({
             data: {
                 tokenHash: refreshTokenHash,
                 adminId: admin.id,
-                expiresAt: refreshExpiresAt
+                expiresAt: refreshExpiresAt,
+                ipAddress: req.ip || req.headers["x-forwarded-for"] || "127.0.0.1",
+                userAgent: req.headers["user-agent"] || "unknown"
             }
         });
 
         await logSecurityEvent(adminId, "2FA_OTP_VERIFIED", req, {
             method: backupCodeUsed ? "backup_code" : "totp"
         });
-        await logAudit(adminId, "LOGIN_SUCCESS", { via: "2FA" });
+        await logAudit(adminId, "LOGIN_SUCCESS", {
+            via: "2FA",
+            ip: req.ip || req.headers["x-forwarded-for"] || "127.0.0.1",
+            userAgent: req.headers["user-agent"] || "unknown"
+        });
 
         // Set tokens in httpOnly cookies
         res.cookie("access_token", accessToken, getAccessCookieOptions());
         res.cookie("refresh_token", rawRefreshToken, getRefreshCookieOptions());
 
         res.json({
-            token: accessToken,
             admin: {
                 id: admin.id,
-                email: admin.email
+                email: admin.email,
+                role: admin.role
             },
             ...(backupCodeUsed && {
                 warning: `Backup code used. ${admin.twoFactorBackupCodes.length - 1} codes remaining.`

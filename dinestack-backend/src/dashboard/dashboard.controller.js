@@ -84,14 +84,14 @@ const getRestaurants = async (req, res) => {
 const getKeys = async (req, res) => {
     try {
         const keys = await prisma.activationCode.findMany({
-            include: { restaurant: true }
+            include: { Restaurant: true }
         });
 
         const formatted = keys.map(k => ({
             id: k.id,
             code: k.code,
-            restaurant: k.restaurant ? k.restaurant.name : (k.entityName || "Unassigned"),
-            entityId: k.restaurant ? k.restaurant.id : null, // Add entity ID
+            restaurant: k.Restaurant ? k.Restaurant.name : (k.entityName || "Unassigned"),
+            entityId: k.Restaurant ? k.Restaurant.id : null, // Add entity ID
             status: k.isUsed ? "Used" : (new Date(k.expiresAt) < new Date() ? "Expired" : "Unused"),
             created: k.createdAt.toISOString().split('T')[0],
             boundTo: k.isUsed ? "Bound" : null
@@ -110,11 +110,11 @@ const getDevices = async (req, res) => {
         });
 
         const formatted = devices.map(d => ({
-            hash: d.hash,
+            hash: d.deviceId || d.id,
             restaurant: d.restaurant.name,
             type: d.type,
             status: d.status,
-            lastSeen: d.lastSeen.toLocaleString()
+            lastSeen: d.lastSeen.toISOString()
         }));
 
         res.json(formatted);
@@ -125,22 +125,83 @@ const getDevices = async (req, res) => {
 
 const getLogs = async (req, res) => {
     try {
-        const logs = await prisma.auditLog.findMany({
-            orderBy: { timestamp: 'desc' },
-            take: 50
-        });
+        const currentUser = req.user;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 50;
+        const skip = (page - 1) * limit;
+
+        const { search, severity, action, startDate, endDate } = req.query;
+
+        // Base filter condition
+        const where = {};
+
+        // 1. Role-based log filtering: MANAGER can only see operational logs
+        // We exclude SECURITY logs for MANAGER
+        if (currentUser.role === "MANAGER") {
+            where.severity = { not: "SECURITY" };
+        } else if (currentUser.role === "INTERN") {
+            return res.status(403).json({ message: "Access denied. Interns cannot view logs." });
+        }
+
+        // 2. Additional filters from query params
+        if (severity) {
+            where.severity = severity;
+        }
+        if (action) {
+            where.action = action;
+        }
+        if (search) {
+            where.OR = [
+                { actor: { contains: search, mode: "insensitive" } },
+                { target: { contains: search, mode: "insensitive" } },
+                { details: { contains: search, mode: "insensitive" } },
+                { action: { contains: search, mode: "insensitive" } }
+            ];
+        }
+
+        // Date range filter
+        if (startDate || endDate) {
+            where.timestamp = {};
+            if (startDate) {
+                where.timestamp.gte = new Date(startDate);
+            }
+            if (endDate) {
+                where.timestamp.lte = new Date(endDate);
+            }
+        }
+
+        // Fetch logs and total count for pagination
+        const [logs, total] = await Promise.all([
+            prisma.auditLog.findMany({
+                where,
+                orderBy: { timestamp: 'desc' },
+                skip,
+                take: limit
+            }),
+            prisma.auditLog.count({ where })
+        ]);
 
         const formatted = logs.map(l => ({
             id: l.id,
             action: l.action,
-            user: l.user,
+            user: l.actor,
             target: l.target,
-            timestamp: l.timestamp.toLocaleString(),
-            details: l.details
+            timestamp: l.timestamp.toISOString(),
+            details: l.details,
+            severity: l.severity
         }));
 
-        res.json(formatted);
+        res.json({
+            logs: formatted,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
+        });
     } catch (error) {
+        console.error("Get logs error:", error);
         res.status(500).json({ error: error.message });
     }
 };
@@ -187,62 +248,51 @@ const deleteRestaurant = async (req, res) => {
     try {
         const { id } = req.params;
 
-        await prisma.$transaction(async (tx) => {
-            // Delete related devices first
-            await tx.device.deleteMany({
-                where: { restaurantId: id }
-            });
-
-            // 1. Break circular dependency (Legacy activationCodeId FK)
-            // If the Restaurant points to an ActivationCode, we must clear this reference first
-            // to allow the ActivationCode to be deleted without FK violation.
-            try {
-                await tx.restaurant.update({
-                    where: { id },
-                    data: { activationCodeId: null }
-                });
-            } catch (e) {
-                // Ignore if it fails (e.g. record not found or other weirdness), 
-                // the main delete will catch it if it's critical.
+        const result = await prisma.$transaction(async (tx) => {
+            const restaurant = await tx.restaurant.findUnique({ where: { id } });
+            if (!restaurant) {
+                throw new Error("Restaurant entity not found");
             }
 
-            // 2. Delete associated Activation Codes (fix for orphaned entities)
-            await tx.activationCode.deleteMany({
-                where: { restaurantId: id }
-            });
-
-            // Delete potentially missing schema relationships (Cascading Delete for Legacy Tables)
-            // Enhanced with PairCode and optimized using direct FKs where available
-            const cascadeTables = [
-                { name: "PairCode", sql: `DELETE FROM "PairCode" WHERE "restaurantId" = $1` },
-                { name: "OrderItem", sql: `DELETE FROM "OrderItem" WHERE "orderId" IN (SELECT "id" FROM "Order" WHERE "restaurantId" = $1)` },
-                { name: "Order", sql: `DELETE FROM "Order" WHERE "restaurantId" = $1` },
-                { name: "Session", sql: `DELETE FROM "Session" WHERE "restaurantId" = $1` },
-                { name: "MenuItem", sql: `DELETE FROM "MenuItem" WHERE "restaurantId" = $1` },
-                { name: "Category", sql: `DELETE FROM "Category" WHERE "restaurantId" = $1` },
-                // TableSession must be deleted before Table (FK constraint)
-                { name: "TableSession", sql: `DELETE FROM "TableSession" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = $1)` },
-                { name: "Table", sql: `DELETE FROM "Table" WHERE "restaurantId" = $1` },
-                { name: "RecoveryCode", sql: `DELETE FROM "RecoveryCode" WHERE "restaurantId" = $1` }
-            ];
-
-            for (const table of cascadeTables) {
-                try {
-                    await tx.$executeRawUnsafe(table.sql, id);
-                } catch (e) {
-                    // Only warn if table actually exists but delete failed
-                    // If table doesn't exist (e.g. legacy cleanup), we might want to ignore or log differently
-                    console.warn(`[DELETE_WARN] Failed to cascade delete ${table.name}: ${e.message}`);
+            // Soft deactivation - revoke access
+            const updated = await tx.restaurant.update({
+                where: { id },
+                data: {
+                    status: 'REVOKED',
+                    isActive: false, // Legacy sync
+                    revokedAt: new Date(),
+                    revokedBy: req.user.email,
+                    revocationReason: "Soft deletion by Administrator"
                 }
-            }
-
-            // Delete the restaurant
-            await tx.restaurant.delete({
-                where: { id }
             });
+
+            // Invalidate associated codes
+            await tx.activationCode.updateMany({
+                where: {
+                    restaurantId: id,
+                    isUsed: false,
+                    status: 'ACTIVE'
+                },
+                data: {
+                    status: 'INVALIDATED'
+                }
+            });
+
+            // Log soft delete audit (CRITICAL severity)
+            await tx.auditLog.create({
+                data: {
+                    action: 'ENTITY_DELETE_SOFT',
+                    actor: req.user.email,
+                    target: `Restaurant:${id}`,
+                    details: `Soft deleted restaurant "${restaurant.name}" (Revoked access)`,
+                    severity: 'CRITICAL'
+                }
+            });
+
+            return updated;
         });
 
-        res.json({ message: "Restaurant deleted successfully" });
+        res.json({ message: "Restaurant access revoked (soft deleted) successfully", restaurant: result });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -265,7 +315,7 @@ const updateRestaurantStatus = async (req, res) => {
 
             if (status === 'REVOKED' || status === 'SUSPENDED') {
                 updateData.revokedAt = new Date();
-                updateData.revokedBy = revokedBy || "Super Admin";
+                updateData.revokedBy = revokedBy || req.user.email || "Super Admin";
                 updateData.revocationReason = reason;
 
                 // Invalidate Activation Codes associated with this restaurant (use FK, not name)
@@ -286,10 +336,23 @@ const updateRestaurantStatus = async (req, res) => {
                 updateData.revocationReason = null;
             }
 
-            return await tx.restaurant.update({
+            const updatedRest = await tx.restaurant.update({
                 where: { id },
                 data: updateData
             });
+
+            // Write status change log
+            await tx.auditLog.create({
+                data: {
+                    action: 'STATUS_CHANGE',
+                    actor: req.user.email,
+                    target: `Restaurant:${id}`,
+                    details: `Updated status of restaurant "${updatedRest.name}" to ${status}. Reason: ${reason || "None specified"}.`,
+                    severity: (status === 'REVOKED' || status === 'SUSPENDED') ? 'CRITICAL' : 'WARNING'
+                }
+            });
+
+            return updatedRest;
         });
 
         res.json(result);

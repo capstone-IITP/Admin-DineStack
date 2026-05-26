@@ -13,17 +13,17 @@ exports.createActivationCode = async (req, res) => {
         // Verify restaurant exists
         const restaurant = await prisma.restaurant.findUnique({
             where: { id: restaurantId },
-            include: { activationCode: true }
+            include: { ActivationCode: true }
         });
 
         if (!restaurant) {
             return res.status(404).json({ message: "Restaurant entity not found" });
         }
 
-        if (restaurant.activationCode && restaurant.activationCode.status === 'ACTIVE' && !restaurant.activationCode.isUsed) {
+        if (restaurant.ActivationCode && restaurant.ActivationCode.status === 'ACTIVE' && !restaurant.ActivationCode.isUsed) {
             return res.status(409).json({
                 message: "Restaurant already has an active, unused activation code",
-                code: restaurant.activationCode.code
+                code: restaurant.ActivationCode.code
             });
         }
 
@@ -43,6 +43,16 @@ exports.createActivationCode = async (req, res) => {
             },
         });
 
+        await prisma.auditLog.create({
+            data: {
+                action: 'KEY_GENERATE',
+                actor: req.user.email,
+                target: `Restaurant:${restaurantId}`,
+                details: `Generated activation code ${code} for plan ${plan}`,
+                severity: 'INFO'
+            }
+        });
+
         res.status(201).json(activationCode);
     } catch (error) {
         console.error(error);
@@ -57,7 +67,7 @@ exports.getAllActivationCodes = async (req, res) => {
     try {
         const codes = await prisma.activationCode.findMany({
             orderBy: { createdAt: "desc" },
-            include: { restaurant: true } // Include linked restaurant details
+            include: { Restaurant: true } // Include linked restaurant details
         });
         res.json(codes);
     } catch (error) {
@@ -69,11 +79,29 @@ exports.getAllActivationCodes = async (req, res) => {
 exports.deleteActivationCode = async (req, res) => {
     try {
         const { id } = req.params;
-        await prisma.activationCode.delete({ where: { id } });
-        res.json({ message: "Activation code deleted successfully" });
+        const code = await prisma.activationCode.findUnique({ where: { id } });
+        if (!code) {
+            return res.status(404).json({ message: "Activation code not found" });
+        }
+        await prisma.activationCode.update({
+            where: { id },
+            data: { status: "INVALIDATED" }
+        });
+
+        await prisma.auditLog.create({
+            data: {
+                action: 'KEY_INVALIDATE',
+                actor: req.user.email,
+                target: `ActivationCode:${code.code}`,
+                details: `Invalidated activation key for restaurant ID ${code.restaurantId}`,
+                severity: 'CRITICAL'
+            }
+        });
+
+        res.json({ message: "Activation code invalidated successfully" });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: "Failed to delete activation code" });
+        res.status(500).json({ message: "Failed to invalidate activation code" });
     }
 };
 
@@ -149,15 +177,16 @@ exports.activateDevice = async (req, res) => {
             await tx.auditLog.create({
                 data: {
                     action: 'DEVICE_ACTIVATED',
-                    user: 'DEVICE',
+                    actor: 'DEVICE',
                     target: `Restaurant:${restaurant.id}`,
-                    details: JSON.stringify({
+                    details: 'Device activated successfully',
+                    metadata: {
                         activationCode: codeRecord.code,
                         plan: codeRecord.plan,
                         durationDays: codeRecord.durationDays,
                         maxTables: codeRecord.maxTables,
                         subscriptionEndsAt: subscriptionEndsAt.toISOString()
-                    })
+                    }
                 }
             });
 
