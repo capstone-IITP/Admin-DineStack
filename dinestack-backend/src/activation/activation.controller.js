@@ -83,25 +83,35 @@ exports.deleteActivationCode = async (req, res) => {
         if (!code) {
             return res.status(404).json({ message: "Activation code not found" });
         }
-        await prisma.activationCode.update({
-            where: { id },
-            data: { status: "INVALIDATED" }
+
+        await prisma.$transaction(async (tx) => {
+            // 1. Clear circular FK reference in Restaurant
+            await tx.restaurant.updateMany({
+                where: { activationCodeId: id },
+                data: { activationCodeId: null }
+            });
+
+            // 2. Hard delete ActivationCode
+            await tx.activationCode.delete({
+                where: { id }
+            });
+
+            // 3. Log hard delete audit
+            await tx.auditLog.create({
+                data: {
+                    action: 'KEY_DELETE',
+                    actor: req.user.email,
+                    target: `ActivationCode:${code.code}`,
+                    details: `Hard deleted activation key for restaurant ID ${code.restaurantId}`,
+                    severity: 'CRITICAL'
+                }
+            });
         });
 
-        await prisma.auditLog.create({
-            data: {
-                action: 'KEY_INVALIDATE',
-                actor: req.user.email,
-                target: `ActivationCode:${code.code}`,
-                details: `Invalidated activation key for restaurant ID ${code.restaurantId}`,
-                severity: 'CRITICAL'
-            }
-        });
-
-        res.json({ message: "Activation code invalidated successfully" });
+        res.json({ message: "Activation code deleted successfully" });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: "Failed to invalidate activation code" });
+        res.status(500).json({ message: "Failed to delete activation code" });
     }
 };
 

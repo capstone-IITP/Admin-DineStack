@@ -5,7 +5,8 @@ const { deleteRestaurant } = require('./src/dashboard/dashboard.controller');
 // Mock request and response objects
 const mockReq = (params, body) => ({
     params: params || {},
-    body: body || {}
+    body: body || {},
+    user: { email: 'superadmin@example.com', role: 'OWNER' }
 });
 
 const mockRes = () => {

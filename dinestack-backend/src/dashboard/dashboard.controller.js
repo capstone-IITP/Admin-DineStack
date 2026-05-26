@@ -254,45 +254,69 @@ const deleteRestaurant = async (req, res) => {
                 throw new Error("Restaurant entity not found");
             }
 
-            // Soft deactivation - revoke access
-            const updated = await tx.restaurant.update({
+            // 1. Delete TableSessions
+            await tx.$executeRaw`DELETE FROM "TableSession" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = ${id})`;
+
+            // 2. Delete PairCodes
+            await tx.pairCode.deleteMany({ where: { restaurantId: id } });
+
+            // 3. Delete OrderItems
+            await tx.$executeRaw`DELETE FROM "OrderItem" WHERE "orderId" IN (SELECT "id" FROM "Order" WHERE "restaurantId" = ${id})`;
+
+            // 4. Delete Orders
+            await tx.order.deleteMany({ where: { restaurantId: id } });
+
+            // 5. Delete Sessions
+            await tx.session.deleteMany({ where: { restaurantId: id } });
+
+            // 6. Delete MenuItems
+            await tx.menuItem.deleteMany({ where: { restaurantId: id } });
+
+            // 7. Delete Categories
+            await tx.category.deleteMany({ where: { restaurantId: id } });
+
+            // 8. Delete Tables
+            await tx.table.deleteMany({ where: { restaurantId: id } });
+
+            // 9. Delete RecoveryCodes
+            await tx.recoveryCode.deleteMany({ where: { restaurantId: id } });
+
+            // 10. Delete Customers
+            await tx.customer.deleteMany({ where: { restaurantId: id } });
+
+            // 11. Delete Devices
+            await tx.device.deleteMany({ where: { restaurantId: id } });
+
+            // 12. Clear circular reference
+            await tx.restaurant.update({
                 where: { id },
-                data: {
-                    status: 'REVOKED',
-                    isActive: false, // Legacy sync
-                    revokedAt: new Date(),
-                    revokedBy: req.user.email,
-                    revocationReason: "Soft deletion by Administrator"
-                }
+                data: { activationCodeId: null }
             });
 
-            // Invalidate associated codes
-            await tx.activationCode.updateMany({
-                where: {
-                    restaurantId: id,
-                    isUsed: false,
-                    status: 'ACTIVE'
-                },
-                data: {
-                    status: 'INVALIDATED'
-                }
-            });
+            // 13. Delete ActivationCodes
+            await tx.activationCode.deleteMany({ where: { restaurantId: id } });
 
-            // Log soft delete audit (CRITICAL severity)
+            // 14. Delete Restaurant itself
+            const deleted = await tx.restaurant.delete({ where: { id } });
+
+            // Log hard delete audit (CRITICAL severity)
             await tx.auditLog.create({
                 data: {
-                    action: 'ENTITY_DELETE_SOFT',
+                    action: 'ENTITY_DELETE_HARD',
                     actor: req.user.email,
                     target: `Restaurant:${id}`,
-                    details: `Soft deleted restaurant "${restaurant.name}" (Revoked access)`,
+                    details: `Hard deleted restaurant "${restaurant.name}" and all associated data`,
                     severity: 'CRITICAL'
                 }
             });
 
-            return updated;
+            return deleted;
+        }, {
+            maxWait: 15000,
+            timeout: 30000
         });
 
-        res.json({ message: "Restaurant access revoked (soft deleted) successfully", restaurant: result });
+        res.json({ message: "Restaurant deleted successfully", restaurant: result });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
