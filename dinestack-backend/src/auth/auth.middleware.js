@@ -44,6 +44,19 @@ exports.requireSuperAdmin = async (req, res, next) => {
             });
         }
 
+        // 2b. CSRF Token Verification for state-changing requests
+        if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
+            const clientCsrfToken = req.headers["x-csrf-token"] || req.headers["x-xsrf-token"];
+            const expectedCsrfToken = decoded.csrfToken;
+
+            if (!expectedCsrfToken || !clientCsrfToken || clientCsrfToken !== expectedCsrfToken) {
+                return res.status(403).json({
+                    message: "CSRF token validation failed. Request blocked.",
+                    code: "CSRF_ERROR"
+                });
+            }
+        }
+
         // 3. Check role claim
         if (decoded.role !== "SUPER_ADMIN") {
             return res.status(403).json({

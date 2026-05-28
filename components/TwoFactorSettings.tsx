@@ -376,6 +376,7 @@ export default function TwoFactorSettings({ apiBase, fetchWithAuth }: TwoFactorS
                                     required
                                     className="w-full bg-[#FFFFF0] border border-[#1F1F1F] px-4 py-3 font-serif placeholder:text-gray-400 focus:outline-none focus:border-[#8D0B41] focus:shadow-[2px_2px_0px_0px_#8D0B41] transition-all"
                                     placeholder="Enter your password"
+                                    autoComplete="off"
                                 />
                             </div>
                             <div>
@@ -390,6 +391,7 @@ export default function TwoFactorSettings({ apiBase, fetchWithAuth }: TwoFactorS
                                     className="w-full bg-[#FFFFF0] border border-[#1F1F1F] px-4 py-3 font-mono text-xl text-center tracking-[0.4em] placeholder:text-gray-300 focus:outline-none focus:border-[#8D0B41] focus:shadow-[2px_2px_0px_0px_#8D0B41] transition-all"
                                     placeholder="000000"
                                     maxLength={6}
+                                    autoComplete="off"
                                 />
                             </div>
                             <div className="flex gap-3 pt-2">

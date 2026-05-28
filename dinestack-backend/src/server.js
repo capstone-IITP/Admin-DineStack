@@ -5,3 +5,4 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 DineStack Backend running on port ${PORT}`);
 });
+// Trigger reload to load new env configs - local db to cloud db

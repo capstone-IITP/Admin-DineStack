@@ -38,6 +38,28 @@ const superAdminRoutes = require("./dashboard/superAdmin.routes");
 
 const app = express();
 
+// 0. Restrict HTTP Methods
+const ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
+app.use((req, res, next) => {
+    if (!ALLOWED_METHODS.includes(req.method)) {
+        return res.status(405).json({ error: `Method ${req.method} Not Allowed` });
+    }
+    next();
+});
+
+// 0b. Validate Content-Type for state-changing requests
+app.use((req, res, next) => {
+    if (["POST", "PUT", "PATCH"].includes(req.method)) {
+        const contentType = req.headers["content-type"] || "";
+        if (!contentType.startsWith("application/json")) {
+            return res.status(415).json({
+                error: "Unsupported Media Type. Content-Type must be application/json"
+            });
+        }
+    }
+    next();
+});
+
 // 1. CSP Nonce Generation Middleware
 app.use((req, res, next) => {
     res.locals.cspNonce = crypto.randomBytes(16).toString("base64");
@@ -92,7 +114,7 @@ app.use((req, res, next) => {
     if (isOriginAllowed(origin)) {
         res.header("Access-Control-Allow-Origin", origin);
         res.header("Access-Control-Allow-Credentials", "true");
-        res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+        res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-CSRF-Token");
         res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
 
         if (req.method === "OPTIONS") {

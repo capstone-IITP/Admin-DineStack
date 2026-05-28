@@ -224,8 +224,8 @@ exports.setupPin = async (req, res) => {
             return res.status(400).json({ error: "Missing required fields" });
         }
 
-        const hashedAdminPin = await bcrypt.hash(adminPin, 10);
-        const hashedKitchenPin = await bcrypt.hash(kitchenPin, 10);
+        const hashedAdminPin = await bcrypt.hash(adminPin, 12);
+        const hashedKitchenPin = await bcrypt.hash(kitchenPin, 12);
 
         await prisma.restaurant.update({
             where: { id: restaurantId },

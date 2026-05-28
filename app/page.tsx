@@ -581,6 +581,7 @@ export default function DineStackAdmin() {
               placeholder="••••••••••••"
               value={newTeamPassword}
               onChange={(e) => setNewTeamPassword(e.target.value)}
+              autoComplete="off"
             />
             <span className="text-[9px] font-mono text-gray-400 mt-1 block">
               Min 12 chars, uppercase, lowercase, number, and special char.
@@ -621,6 +622,7 @@ export default function DineStackAdmin() {
               placeholder="••••••••••••"
               value={newResetPassword}
               onChange={(e) => setNewResetPassword(e.target.value)}
+              autoComplete="off"
             />
             <span className="text-[9px] font-mono text-gray-400 mt-1 block">
               Min 12 chars, uppercase, lowercase, number, and special char.

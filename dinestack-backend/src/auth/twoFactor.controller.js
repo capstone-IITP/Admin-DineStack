@@ -57,6 +57,16 @@ function getAccessCookieOptions() {
     };
 }
 
+function getCsrfCookieOptions() {
+    const isProduction = process.env.NODE_ENV === "production";
+    return {
+        httpOnly: false, // Accessible to client JS
+        secure: isProduction,
+        sameSite: "strict",
+        path: "/"
+    };
+}
+
 /**
  * Log security event with IP and user-agent.
  */
@@ -367,9 +377,12 @@ exports.verifyLogin2FA = async (req, res) => {
             }
         });
 
+        // Generate CSRF token
+        const csrfToken = crypto.randomBytes(32).toString("hex");
+
         // Generate access token
         const accessToken = jwt.sign(
-            { adminId: admin.id, role: "SUPER_ADMIN", subRole: admin.role },
+            { adminId: admin.id, role: "SUPER_ADMIN", subRole: admin.role, csrfToken },
             process.env.JWT_SECRET,
             { expiresIn: ACCESS_TOKEN_EXPIRY }
         );
@@ -411,9 +424,10 @@ exports.verifyLogin2FA = async (req, res) => {
             userAgent: req.headers["user-agent"] || "unknown"
         });
 
-        // Set tokens in httpOnly cookies
+        // Set tokens in httpOnly cookies and CSRF in standard cookie
         res.cookie("access_token", accessToken, getAccessCookieOptions());
         res.cookie("refresh_token", rawRefreshToken, getRefreshCookieOptions());
+        res.cookie("csrf_token", csrfToken, getCsrfCookieOptions());
 
         res.json({
             admin: {
