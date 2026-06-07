@@ -261,13 +261,17 @@ const deleteRestaurant = async (req, res) => {
             }
 
             // 1. Delete TableSessions
-            await tx.$executeRaw`DELETE FROM "TableSession" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = ${id})`;
+            await tx.tableSession.deleteMany({ where: { restaurantId: id } });
 
             // 2. Delete PairCodes
             await tx.pairCode.deleteMany({ where: { restaurantId: id } });
 
             // 3. Delete OrderItems
-            await tx.$executeRaw`DELETE FROM "OrderItem" WHERE "orderId" IN (SELECT "id" FROM "Order" WHERE "restaurantId" = ${id})`;
+            const orders = await tx.order.findMany({ where: { restaurantId: id }, select: { id: true } });
+            const orderIds = orders.map(o => o.id);
+            if (orderIds.length > 0) {
+                await tx.orderItem.deleteMany({ where: { orderId: { in: orderIds } } });
+            }
 
             // 4. Delete Orders
             await tx.order.deleteMany({ where: { restaurantId: id } });
