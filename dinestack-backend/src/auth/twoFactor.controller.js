@@ -86,7 +86,7 @@ async function logSecurityEvent(adminId, action, req, metadata = null) {
                 details: `Security Event: ${action}`,
                 ipAddress: req.ip || req.headers["x-forwarded-for"] || "unknown",
                 userAgent: req.headers["user-agent"] || "unknown",
-                metadata: metadata ? (typeof metadata === "string" ? JSON.parse(metadata) : metadata) : null
+                metadata: metadata ? (typeof metadata === "string" ? metadata : JSON.stringify(metadata)) : null
             }
         });
     } catch (err) {

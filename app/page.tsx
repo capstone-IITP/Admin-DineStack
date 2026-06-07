@@ -38,6 +38,8 @@ import { AuditView } from '../components/views/AuditView';
 import { PaymentsView } from '../components/views/PaymentsView';
 import { CouponsView } from '../components/views/CouponsView';
 import { TeamView } from '../components/views/TeamView';
+import { TrialMonitoringView } from '../components/views/TrialMonitoringView';
+import { SubscriptionMonitoringView } from '../components/views/SubscriptionMonitoringView';
 
 export default function DineStackAdmin() {
   const {
@@ -221,6 +223,8 @@ export default function DineStackAdmin() {
             Monitoring
           </div>
           {renderNavItem("dashboard", "Overview", Activity)}
+          {renderNavItem("trials", "Trial Monitoring", Activity)}
+          {renderNavItem("subscriptions", "Subscriptions", CreditCard)}
 
           <div className="px-6 mb-3 mt-8 text-[10px] font-mono font-bold text-[#6A6A6A] uppercase tracking-widest flex items-center gap-2">
             <div className="w-1 h-1 bg-[#8D0B41]"></div>
@@ -277,7 +281,9 @@ export default function DineStackAdmin() {
         <div className="max-w-6xl mx-auto">
           {currentView === 'dashboard' && <DashboardView stats={stats} onRefresh={fetchData} />}
           {currentView === 'restaurants' && <RestaurantsView data={restaurants} userRole={userRole} onSuspend={handleSuspend} onNewRestaurant={handleNewRestaurant} onDelete={handleDeleteRestaurant} />}
-          {currentView === 'keys' && <KeysView keys={keys} restaurants={restaurants} onGenerate={handleGenerateKey} onDelete={handleDeleteClick} />}
+          {currentView === 'keys' && <KeysView keys={keys} onGenerate={handleGenerateKey} onDelete={handleDeleteClick} />}
+          {currentView === 'trials' && <TrialMonitoringView restaurants={restaurants} />}
+          {currentView === 'subscriptions' && <SubscriptionMonitoringView restaurants={restaurants} />}
           {currentView === 'devices' && <DeviceView devices={devices} />}
           {currentView === 'support' && <SupportView onOverride={handleSupportOverride} />}
           {currentView === 'audit' && (

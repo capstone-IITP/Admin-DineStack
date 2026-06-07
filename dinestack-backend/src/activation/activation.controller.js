@@ -4,42 +4,21 @@ const bcrypt = require("bcrypt");
 
 exports.createActivationCode = async (req, res) => {
     try {
-        const { restaurantId, plan, durationDays, maxTables } = req.body;
+        const { restaurantName, notes } = req.body;
 
-        if (!restaurantId || !plan || !durationDays || !maxTables) {
-            return res.status(400).json({ message: "All fields are required (restaurantId, plan, duration, maxTables)" });
-        }
-
-        // Verify restaurant exists
-        const restaurant = await prisma.restaurant.findUnique({
-            where: { id: restaurantId },
-            include: { ActivationCode: true }
-        });
-
-        if (!restaurant) {
-            return res.status(404).json({ message: "Restaurant entity not found" });
-        }
-
-        if (restaurant.ActivationCode && restaurant.ActivationCode.status === 'ACTIVE' && !restaurant.ActivationCode.isUsed) {
-            return res.status(409).json({
-                message: "Restaurant already has an active, unused activation code",
-                code: restaurant.ActivationCode.code
-            });
+        if (!restaurantName) {
+            return res.status(400).json({ message: "Restaurant name is required" });
         }
 
         const code = generateCode();
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + durationDays);
 
         const activationCode = await prisma.activationCode.create({
             data: {
                 code,
-                restaurantId, // Direct linkage
-                entityName: restaurant.name, // Keep for backward compat
-                plan,
-                durationDays,
-                maxTables,
-                expiresAt,
+                restaurantName,
+                notes,
+                generatedBy: req.user.email,
+                status: 'ACTIVE'
             },
         });
 
@@ -47,8 +26,8 @@ exports.createActivationCode = async (req, res) => {
             data: {
                 action: 'KEY_GENERATE',
                 actor: req.user.email,
-                target: `Restaurant:${restaurantId}`,
-                details: `Generated activation code ${code} for plan ${plan}`,
+                target: `ActivationCode:${code}`,
+                details: `Generated activation code ${code} for ${restaurantName}`,
                 severity: 'INFO'
             }
         });
@@ -57,7 +36,7 @@ exports.createActivationCode = async (req, res) => {
     } catch (error) {
         console.error(error);
         if (error.code === 'P2002') {
-            return res.status(409).json({ message: "Restaurant already has an activation code assigned" });
+            return res.status(409).json({ message: "A conflict occurred" });
         }
         res.status(500).json({ message: "Failed to create activation code" });
     }
@@ -66,8 +45,8 @@ exports.createActivationCode = async (req, res) => {
 exports.getAllActivationCodes = async (req, res) => {
     try {
         const codes = await prisma.activationCode.findMany({
-            orderBy: { createdAt: "desc" },
-            include: { Restaurant: true } // Include linked restaurant details
+            orderBy: { generatedAt: "desc" },
+            include: { Restaurant: true }
         });
         res.json(codes);
     } catch (error) {
@@ -125,8 +104,7 @@ exports.activateDevice = async (req, res) => {
 
         // 1. Find the code details
         const codeRecord = await prisma.activationCode.findUnique({
-            where: { code: activationCode },
-            include: { restaurant: true } // Fetch linked restaurant immediately
+            where: { code: activationCode }
         });
 
         if (!codeRecord) {
@@ -134,53 +112,49 @@ exports.activateDevice = async (req, res) => {
         }
 
         // 2. Security Checks
-        if (codeRecord.isUsed) {
+        if (codeRecord.status === 'USED' || codeRecord.isUsed) {
             return res.status(409).json({ error: "Activation code already used" });
         }
 
-        if (new Date() > new Date(codeRecord.expiresAt)) {
-            return res.status(401).json({ error: "Activation code expired" });
+        if (codeRecord.status === 'REVOKED' || codeRecord.status === 'INVALIDATED') {
+            return res.status(401).json({ error: "Activation code has been revoked" });
         }
 
-        if (codeRecord.status === 'INVALIDATED') {
-            return res.status(401).json({ error: "Activation code has been invalidated" });
-        }
-
-        // 3. Verify restaurant linkage (must exist from license generation)
-        if (!codeRecord.restaurant) {
-            return res.status(500).json({ error: "Activation code is not linked to a valid restaurant entity" });
-        }
-
-        // 4. Verify restaurant is in an activatable state
-        if (codeRecord.restaurant.status === 'REVOKED') {
-            return res.status(403).json({ error: "Restaurant access has been revoked. Contact administrator." });
-        }
-
-        if (codeRecord.restaurant.status === 'SUSPENDED') {
-            return res.status(403).json({ error: "Restaurant is currently suspended. Contact administrator." });
-        }
-
-        // 5. Perform Activation (Transaction) — NO new entity creation!
+        // 3. Perform Activation (Transaction) — Create Entity and Link
         const result = await prisma.$transaction(async (tx) => {
+            const trialStartedAt = new Date();
+            const trialEndsAt = new Date();
+            trialEndsAt.setDate(trialEndsAt.getDate() + 7);
+
+            // Create new restaurant
+            const restaurant = await tx.restaurant.create({
+                data: {
+                    name: codeRecord.restaurantName || codeRecord.entityName || "Unknown Restaurant",
+                    status: 'ACTIVE',
+                    isActive: true,
+                    trialStartedAt,
+                    trialEndsAt,
+                    planStatus: 'TRIAL',
+                    subscriptionStatus: 'PENDING'
+                }
+            });
 
             // Mark code as used
             await tx.activationCode.update({
                 where: { id: codeRecord.id },
-                data: { isUsed: true, usedAt: new Date() }
+                data: { 
+                    status: 'USED', 
+                    isUsed: true, 
+                    activatedAt: new Date(), 
+                    usedAt: new Date(),
+                    restaurantId: restaurant.id
+                }
             });
 
-            // Calculate and set subscription end date
-            const subscriptionEndsAt = new Date();
-            subscriptionEndsAt.setDate(subscriptionEndsAt.getDate() + codeRecord.durationDays);
-
-            // Update existing restaurant (NOT creating a new one)
-            const restaurant = await tx.restaurant.update({
-                where: { id: codeRecord.restaurant.id },
-                data: {
-                    status: 'ACTIVE',
-                    isActive: true,
-                    subscriptionEndsAt
-                }
+            // Update circular reference if needed
+            await tx.restaurant.update({
+                where: { id: restaurant.id },
+                data: { activationCodeId: codeRecord.id }
             });
 
             // Audit log
@@ -189,13 +163,10 @@ exports.activateDevice = async (req, res) => {
                     action: 'DEVICE_ACTIVATED',
                     actor: 'DEVICE',
                     target: `Restaurant:${restaurant.id}`,
-                    details: 'Device activated successfully',
+                    details: 'Device activated successfully, 7-day trial started',
                     metadata: {
                         activationCode: codeRecord.code,
-                        plan: codeRecord.plan,
-                        durationDays: codeRecord.durationDays,
-                        maxTables: codeRecord.maxTables,
-                        subscriptionEndsAt: subscriptionEndsAt.toISOString()
+                        trialEndsAt: trialEndsAt.toISOString()
                     }
                 }
             });
@@ -203,7 +174,7 @@ exports.activateDevice = async (req, res) => {
             return restaurant;
         });
 
-        // 6. Success — return EXISTING restaurant, never a duplicate
+        // 4. Success
         return res.json({
             success: true,
             restaurant: result,

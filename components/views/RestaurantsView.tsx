@@ -8,6 +8,10 @@ interface Restaurant {
   created: string;
   devices: number;
   licenseType: string;
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
+  planStatus: string;
+  subscriptionStatus: string;
 }
 
 interface RestaurantsViewProps {
@@ -45,7 +49,9 @@ export const RestaurantsView = ({ data, userRole, onSuspend, onNewRestaurant, on
             <tr>
               <th className="px-6 py-4 font-mono font-normal uppercase tracking-widest text-[10px]">ID</th>
               <th className="px-6 py-4 font-mono font-normal uppercase tracking-widest text-[10px]">Legal Name</th>
-              <th className="px-6 py-4 font-mono font-normal uppercase tracking-widest text-[10px]">Tier</th>
+              <th className="px-6 py-4 font-mono font-normal uppercase tracking-widest text-[10px]">Plan Status</th>
+              <th className="px-6 py-4 font-mono font-normal uppercase tracking-widest text-[10px]">Sub Status</th>
+              <th className="px-6 py-4 font-mono font-normal uppercase tracking-widest text-[10px]">Trial Ends</th>
               <th className="px-6 py-4 font-mono font-normal uppercase tracking-widest text-[10px]">Devices</th>
               <th className="px-6 py-4 font-mono font-normal uppercase tracking-widest text-[10px]">State</th>
               <th className="px-6 py-4 text-right font-mono font-normal uppercase tracking-widest text-[10px]">Control</th>
@@ -56,7 +62,9 @@ export const RestaurantsView = ({ data, userRole, onSuspend, onNewRestaurant, on
               <tr key={r.id} className="hover:bg-[#FFFFF0] group transition-colors">
                 <td className="px-6 py-4 font-mono text-[#6A6A6A] text-xs border-r border-transparent group-hover:border-[#8D0B41]/20">{r.id}</td>
                 <td className="px-6 py-4 font-serif font-bold text-[#1F1F1F] text-lg">{r.name}</td>
-                <td className="px-6 py-4 font-mono text-xs text-[#1F1F1F] uppercase">{r.licenseType}</td>
+                <td className="px-6 py-4 font-mono text-xs text-[#1F1F1F] uppercase">{r.planStatus}</td>
+                <td className="px-6 py-4 font-mono text-xs text-[#1F1F1F] uppercase">{r.subscriptionStatus}</td>
+                <td className="px-6 py-4 font-mono text-xs text-[#1F1F1F]">{r.trialEndsAt ? r.trialEndsAt.split('T')[0] : '---'}</td>
                 <td className="px-6 py-4 font-mono text-xs text-[#1F1F1F]">{r.devices}</td>
                 <td className="px-6 py-4"><StatusBadge status={r.status} /></td>
                 <td className="px-6 py-4 text-right">

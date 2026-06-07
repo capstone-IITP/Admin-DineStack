@@ -23,39 +23,53 @@ model SuperAdmin {
   otpBlockedUntil      DateTime?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @default(now()) @updatedAt
-  role                 String         @default("MANAGER")
   lastActive           DateTime?
-  refreshTokens        RefreshToken[]
+  role                 String?
+  RefreshToken         RefreshToken[]
 }
 
 model RefreshToken {
-  id        String     @id @default(uuid())
-  tokenHash String     @unique
-  adminId   String
-  expiresAt DateTime
-  createdAt DateTime   @default(now())
-  ipAddress String?
-  userAgent String?
-  admin     SuperAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  id           String      @id @default(uuid())
+  tokenHash    String      @unique
+  adminId      String?
+  expiresAt    DateTime
+  createdAt    DateTime    @default(now())
+  ipAddress    String?
+  userAgent    String?
+  deviceId     String?
+  restaurantId String?
+  Restaurant   Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  admin        SuperAdmin? @relation(fields: [adminId], references: [id], onDelete: Cascade)
 
+  @@index([deviceId])
+  @@index([restaurantId])
   @@index([adminId])
-  @@index([expiresAt])
 }
 
 model ActivationCode {
-  id           String      @id @default(uuid())
-  code         String      @unique
-  entityName   String?
-  plan         String
-  durationDays Int
-  maxTables    Int
-  isUsed       Boolean?    @default(false)
-  status       String      @default("ACTIVE")
-  expiresAt    DateTime
-  usedAt       DateTime?
-  restaurantId String?
-  createdAt    DateTime    @default(now())
-  Restaurant   Restaurant?
+  id             String      @id @default(uuid())
+  code           String      @unique
+  entityName     String?
+  plan           String?
+  durationDays   Int?
+  maxTables      Int?
+  isUsed         Boolean     @default(false)
+  status         String      @default("ACTIVE")
+  expiresAt      DateTime?
+  usedAt         DateTime?
+  restaurantId   String?
+  createdAt      DateTime    @default(now())
+  
+  // New fields for updated Trial logic
+  restaurantName String?
+  notes          String?
+  generatedAt    DateTime    @default(now())
+  activatedAt    DateTime?
+  generatedBy    String?
+  
+  Restaurant     Restaurant?
+
+  @@index([restaurantId])
 }
 
 model Restaurant {
@@ -67,6 +81,13 @@ model Restaurant {
   isRegistered       Boolean?         @default(false)
   forceReactivation  Boolean?         @default(false)
   subscriptionEndsAt DateTime?
+  
+  // New fields for updated Trial logic
+  trialStartedAt     DateTime?
+  trialEndsAt        DateTime?
+  planStatus         String           @default("TRIAL")
+  subscriptionStatus String           @default("PENDING")
+
   revokedAt          DateTime?
   revokedBy          String?
   revocationReason   String?
@@ -79,6 +100,9 @@ model Restaurant {
   email              String?
   phone              String?
   recoveryLockUntil  DateTime?
+  clerkUserId        String?          @unique
+  updatedAt          DateTime         @default(now())
+  ApiKey             ApiKey[]
   Category           Category[]
   Customer           Customer[]
   devices            Device[]
@@ -86,14 +110,13 @@ model Restaurant {
   Order              Order[]
   PairCode           PairCode[]
   RecoveryCode       RecoveryCode[]
+  RefreshToken       RefreshToken[]
   ActivationCode     ActivationCode?  @relation(fields: [activationCodeId], references: [id])
   Session            Session[]
+  Subscription       Subscription?
+  Payment            Payment[]
   Table              Table[]
   TableSession       TableSession[]
-  payments           Payment[]
-  couponUsages       CouponUsage[]
-
-  @@index([status])
 }
 
 model Device {
@@ -109,23 +132,23 @@ model Device {
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
 
   @@index([restaurantId])
+  @@index([deviceId])
 }
 
 model AuditLog {
   id        String   @id @default(uuid())
   action    String
-  actor     String
+  actor     String?
   target    String?
   details   String
-  severity  String   @default("INFO")
-  metadata  Json?
+  severity  String?
+  metadata  String?
   ipAddress String?
   userAgent String?
   timestamp DateTime @default(now())
+  user      String?
 
   @@index([timestamp])
-  @@index([severity])
-  @@index([actor])
 }
 
 model Category {
@@ -137,6 +160,8 @@ model Category {
   code         String?
   Restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
   MenuItem     MenuItem[]
+
+  @@index([restaurantId])
 }
 
 model Customer {
@@ -149,6 +174,7 @@ model Customer {
   Order        Order[]
 
   @@unique([deviceToken, restaurantId])
+  @@index([restaurantId])
 }
 
 model MenuItem {
@@ -164,6 +190,9 @@ model MenuItem {
   Category     Category    @relation(fields: [categoryId], references: [id])
   Restaurant   Restaurant  @relation(fields: [restaurantId], references: [id])
   OrderItem    OrderItem[]
+
+  @@index([categoryId])
+  @@index([restaurantId])
 }
 
 model Order {
@@ -179,6 +208,11 @@ model Order {
   Restaurant   Restaurant  @relation(fields: [restaurantId], references: [id])
   Table        Table       @relation(fields: [tableId], references: [id])
   OrderItem    OrderItem[]
+
+  @@index([createdAt])
+  @@index([customerId])
+  @@index([restaurantId])
+  @@index([tableId])
 }
 
 model OrderItem {
@@ -190,6 +224,9 @@ model OrderItem {
   createdAt  DateTime @default(now())
   MenuItem   MenuItem @relation(fields: [menuItemId], references: [id])
   Order      Order    @relation(fields: [orderId], references: [id])
+
+  @@index([menuItemId])
+  @@index([orderId])
 }
 
 model PairCode {
@@ -204,6 +241,8 @@ model PairCode {
   createdAt      DateTime   @default(now())
   expiresAt      DateTime
   Restaurant     Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@index([restaurantId])
 }
 
 model RecoveryCode {
@@ -213,6 +252,8 @@ model RecoveryCode {
   restaurantId String
   createdAt    DateTime   @default(now())
   Restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@index([restaurantId])
 }
 
 model Session {
@@ -224,6 +265,9 @@ model Session {
   createdAt    DateTime   @default(now())
   Restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
   Table        Table      @relation(fields: [tableId], references: [id])
+
+  @@index([restaurantId])
+  @@index([tableId])
 }
 
 model Table {
@@ -237,6 +281,8 @@ model Table {
   Session      Session[]
   Restaurant   Restaurant     @relation(fields: [restaurantId], references: [id])
   TableSession TableSession[]
+
+  @@index([restaurantId])
 }
 
 model TableSession {
@@ -250,46 +296,61 @@ model TableSession {
   updatedAt    DateTime
   Restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
   Table        Table      @relation(fields: [tableId], references: [id])
-}
-
-model Coupon {
-  id            String        @id @default(uuid())
-  code          String        @unique
-  discountType  String
-  discountValue Float
-  status        String        @default("ACTIVE")
-  expiresAt     DateTime?
-  usageCount    Int           @default(0)
-  maxUsage      Int?
-  createdAt     DateTime      @default(now())
-  usages        CouponUsage[]
-}
-
-model CouponUsage {
-  id           String     @id @default(uuid())
-  couponId     String
-  restaurantId String
-  usedAt       DateTime   @default(now())
-  coupon       Coupon     @relation(fields: [couponId], references: [id], onDelete: Cascade)
-  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-
-  @@unique([couponId, restaurantId])
-}
-
-model Payment {
-  id            String     @id @default(uuid())
-  restaurantId  String
-  amount        Float
-  currency      String     @default("USD")
-  status        String     @default("PENDING")
-  transactionId String     @unique
-  invoiceRef    String     @unique
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@index([restaurantId])
-  @@index([status])
+  @@index([tableId])
+}
+
+model ApiKey {
+  id           String     @id
+  key          String     @unique
+  name         String     @default("Default Key")
+  restaurantId String
+  createdAt    DateTime   @default(now())
+  lastUsedAt   DateTime?
+  Restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@index([restaurantId])
+}
+
+model Subscription {
+  id                     String     @id
+  restaurantId           String     @unique
+  razorpayCustomerId     String?    @unique
+  razorpaySubscriptionId String?    @unique
+  planId                 String
+  status                 String     @default("TRIAL")
+  autopayEnabled         Boolean    @default(false)
+  trialStartDate         DateTime?
+  trialEndDate           DateTime?
+  currentCycleStart      DateTime?
+  currentCycleEnd        DateTime?
+  nextBillingDate        DateTime?
+  paymentFailureCount    Int        @default(0)
+  gracePeriodEndDate     DateTime?
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime
+  Restaurant             Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@index([restaurantId])
+}
+
+model SuperAdminAuditLog {
+  id        String   @id
+  adminId   String
+  action    String
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  @@index([adminId])
+}
+
+model WebhookEvent {
+  id        String   @id
+  eventId   String   @unique
+  eventType String
+  payload   String
+  createdAt DateTime @default(now())
 }
 
 enum RestaurantStatus {
@@ -297,3 +358,31 @@ enum RestaurantStatus {
   SUSPENDED
   REVOKED
 }
+
+model Payment {
+  id            String     @id @default(uuid())
+  status        String
+  transactionId String?
+  invoiceRef    String?
+  amount        Float
+  currency      String     @default("USD")
+  restaurantId  String
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @default(now()) @updatedAt
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@index([restaurantId])
+}
+
+model Coupon {
+  id            String    @id @default(uuid())
+  code          String    @unique
+  discountType  String
+  discountValue Float
+  expiresAt     DateTime?
+  maxUsage      Int?
+  status        String    @default("ACTIVE")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+}
+

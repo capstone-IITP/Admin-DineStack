@@ -124,15 +124,13 @@ export const getKeys = async () => {
   return fetchWithAuth(`${apiBase}/super-admin/dashboard/keys`);
 };
 
-export const generateKey = async (restaurantId: string) => {
+export const generateKey = async (restaurantName: string, notes: string = "") => {
   const apiBase = getApiBase();
   return fetchWithAuth(`${apiBase}/super-admin/activation-codes`, {
     method: 'POST',
     body: JSON.stringify({
-      restaurantId,
-      plan: "Standard",
-      durationDays: 30,
-      maxTables: 10,
+      restaurantName,
+      notes,
     }),
   });
 };

@@ -10,6 +10,10 @@ export interface Restaurant {
   created: string;
   devices: number;
   licenseType: string;
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
+  planStatus: string;
+  subscriptionStatus: string;
 }
 
 export interface LicenseKey {
@@ -19,7 +23,9 @@ export interface LicenseKey {
   entityId?: string | null;
   status: string;
   created: string;
-  boundTo: string | null;
+  activatedAt?: string | null;
+  notes?: string | null;
+  generatedBy?: string | null;
 }
 
 export interface Device {
@@ -473,17 +479,17 @@ export function useDineStackAdmin() {
     }
   };
 
-  const handleGenerateKey = async (restaurantId: string) => {
+  const handleGenerateKey = async (restaurantName: string, notes: string = "") => {
     try {
-      const res = await api.generateKey(restaurantId);
+      const res = await api.generateKey(restaurantName, notes);
       if (res.ok) {
-        addLog('KEY_GENERATE', restaurantId, 'Generated activation key');
+        addLog('KEY_GENERATE', restaurantName, 'Generated activation key');
         fetchData();
       } else {
         const parsed = await api.safeJsonParse(res);
         if (res.status === 409) {
           const codeMsg = parsed.data?.code ? `\n\nExisting Code: ${parsed.data.code}` : '';
-          showAlert("Key Already Exists", (parsed.data?.message || 'This restaurant already has an active, unused activation code.') + codeMsg, 'error');
+          showAlert("Key Already Exists", (parsed.data?.message || 'A conflict occurred generating the code.') + codeMsg, 'error');
         } else {
           showAlert("Failed to generate key", parsed.data?.message || 'Unknown error', 'error');
         }
@@ -526,6 +532,9 @@ export function useDineStackAdmin() {
       if (res.ok) {
         addLog('ENTITY_DELETE', restaurantToDelete, 'Deleted entity and associated devices');
         fetchData();
+      } else {
+        const parsed = await api.safeJsonParse(res);
+        showAlert("Failed to delete entity", parsed.data?.message || parsed.data?.error || 'Unknown error', 'error');
       }
     } catch (err) {
       console.error(err);

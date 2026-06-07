@@ -17,7 +17,7 @@ async function logAudit(actorIdOrEmail, action, metadata = null, severity = "INF
                 action,
                 severity,
                 details: details || `Performed ${action}`,
-                metadata: metadata ? (typeof metadata === "string" ? JSON.parse(metadata) : metadata) : null
+                metadata: metadata ? (typeof metadata === "string" ? metadata : JSON.stringify(metadata)) : null
             }
         });
     } catch (err) {

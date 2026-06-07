@@ -72,7 +72,11 @@ const getRestaurants = async (req, res) => {
             devices: r._count.devices,
             licenseType: "Standard", // Default for now
             revokedAt: r.revokedAt,
-            revocationReason: r.revocationReason
+            revocationReason: r.revocationReason,
+            trialStartedAt: r.trialStartedAt ? r.trialStartedAt.toISOString() : null,
+            trialEndsAt: r.trialEndsAt ? r.trialEndsAt.toISOString() : null,
+            planStatus: r.planStatus || 'TRIAL',
+            subscriptionStatus: r.subscriptionStatus || 'PENDING'
         }));
 
         res.json(formatted);
@@ -90,11 +94,13 @@ const getKeys = async (req, res) => {
         const formatted = keys.map(k => ({
             id: k.id,
             code: k.code,
-            restaurant: k.Restaurant ? k.Restaurant.name : (k.entityName || "Unassigned"),
-            entityId: k.Restaurant ? k.Restaurant.id : null, // Add entity ID
-            status: k.isUsed ? "Used" : (new Date(k.expiresAt) < new Date() ? "Expired" : "Unused"),
-            created: k.createdAt.toISOString().split('T')[0],
-            boundTo: k.isUsed ? "Bound" : null
+            restaurant: k.restaurantName || k.entityName || "Unassigned",
+            entityId: k.restaurantId || null,
+            status: k.status,
+            created: (k.generatedAt || k.createdAt).toISOString().split('T')[0],
+            activatedAt: k.activatedAt ? k.activatedAt.toISOString() : (k.usedAt ? k.usedAt.toISOString() : null),
+            notes: k.notes,
+            generatedBy: k.generatedBy
         }));
 
         res.json(formatted);
@@ -255,13 +261,17 @@ const deleteRestaurant = async (req, res) => {
             }
 
             // 1. Delete TableSessions
-            await tx.$executeRaw`DELETE FROM "TableSession" WHERE "tableId" IN (SELECT "id" FROM "Table" WHERE "restaurantId" = ${id})`;
+            await tx.tableSession.deleteMany({ where: { restaurantId: id } });
 
             // 2. Delete PairCodes
             await tx.pairCode.deleteMany({ where: { restaurantId: id } });
 
             // 3. Delete OrderItems
-            await tx.$executeRaw`DELETE FROM "OrderItem" WHERE "orderId" IN (SELECT "id" FROM "Order" WHERE "restaurantId" = ${id})`;
+            const orders = await tx.order.findMany({ where: { restaurantId: id }, select: { id: true } });
+            const orderIds = orders.map(o => o.id);
+            if (orderIds.length > 0) {
+                await tx.orderItem.deleteMany({ where: { orderId: { in: orderIds } } });
+            }
 
             // 4. Delete Orders
             await tx.order.deleteMany({ where: { restaurantId: id } });
@@ -286,6 +296,18 @@ const deleteRestaurant = async (req, res) => {
 
             // 11. Delete Devices
             await tx.device.deleteMany({ where: { restaurantId: id } });
+
+            // Delete ApiKeys
+            await tx.apiKey.deleteMany({ where: { restaurantId: id } });
+
+            // Delete RefreshTokens
+            await tx.refreshToken.deleteMany({ where: { restaurantId: id } });
+
+            // Delete Subscriptions
+            await tx.subscription.deleteMany({ where: { restaurantId: id } });
+
+            // Delete Payments
+            await tx.payment.deleteMany({ where: { restaurantId: id } });
 
             // 12. Clear circular reference
             await tx.restaurant.update({
