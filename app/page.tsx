@@ -281,7 +281,7 @@ export default function DineStackAdmin() {
         <div className="max-w-6xl mx-auto">
           {currentView === 'dashboard' && <DashboardView stats={stats} onRefresh={fetchData} />}
           {currentView === 'restaurants' && <RestaurantsView data={restaurants} userRole={userRole} onSuspend={handleSuspend} onNewRestaurant={handleNewRestaurant} onDelete={handleDeleteRestaurant} />}
-          {currentView === 'keys' && <KeysView keys={keys} onGenerate={handleGenerateKey} onDelete={handleDeleteClick} />}
+          {currentView === 'keys' && <KeysView keys={keys} restaurants={restaurants} onGenerate={handleGenerateKey} onDelete={handleDeleteClick} />}
           {currentView === 'trials' && <TrialMonitoringView restaurants={restaurants} />}
           {currentView === 'subscriptions' && <SubscriptionMonitoringView restaurants={restaurants} />}
           {currentView === 'devices' && <DeviceView devices={devices} />}
