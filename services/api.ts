@@ -137,7 +137,7 @@ export const generateKey = async (restaurantName: string, notes: string = "") =>
 
 export const deleteKey = async (id: string) => {
   const apiBase = getApiBase();
-  return fetchWithAuth(`${apiBase}/super-admin/activation-codes/${id}`, {
+  return fetchWithAuth(`${apiBase}/super-admin/dashboard/keys/${id}`, {
     method: 'DELETE',
   });
 };

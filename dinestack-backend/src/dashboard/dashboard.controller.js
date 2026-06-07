@@ -8,6 +8,13 @@ const getDashboardStats = async (req, res) => {
         // Registry count = total activation codes (source of truth)
         const registryCount = await prisma.activationCode.count();
 
+        try {
+            const rawKeys = await prisma.$queryRaw`SELECT * FROM "ActivationCode"`;
+            require('fs').writeFileSync('e:\\OneDrive\\Desktop\\DineStack Admin\\dinestack-backend\\debug.json', JSON.stringify(rawKeys, null, 2));
+        } catch (e) {
+            require('fs').writeFileSync('e:\\OneDrive\\Desktop\\DineStack Admin\\dinestack-backend\\debug.json', JSON.stringify({ error: e.message }));
+        }
+
         // Used licenses = activation codes that have been consumed
         const usedLicenses = await prisma.activationCode.count({
             where: { isUsed: true }
@@ -94,9 +101,15 @@ const getKeys = async (req, res) => {
             console.warn("Could not auto-fix generatedAt:", e.message);
         }
 
-        const keys = await prisma.activationCode.findMany({
-            include: { Restaurant: true }
-        });
+        let keys = [];
+        try {
+            // This will fail if local DB is out of sync with Prisma schema
+            keys = await prisma.activationCode.findMany();
+        } catch (dbError) {
+            console.warn("Prisma findMany failed (likely schema mismatch), falling back to raw query:", dbError.message);
+            // Fallback to raw query which ignores missing schema columns
+            keys = await prisma.$queryRaw`SELECT * FROM "ActivationCode"`;
+        }
 
         const formatted = keys.map(k => {
             const createdDate = k.generatedAt || k.createdAt || new Date();
@@ -108,8 +121,8 @@ const getKeys = async (req, res) => {
                 restaurant: k.restaurantName || k.entityName || "Unassigned",
                 entityId: k.restaurantId || null,
                 status: k.status,
-                created: createdDate instanceof Date ? createdDate.toISOString().split('T')[0] : "Unknown",
-                activatedAt: activatedDate instanceof Date ? activatedDate.toISOString() : null,
+                created: createdDate instanceof Date ? createdDate.toISOString().split('T')[0] : (typeof createdDate === 'string' ? createdDate.split('T')[0] : "Unknown"),
+                activatedAt: activatedDate instanceof Date ? activatedDate.toISOString() : (typeof activatedDate === 'string' ? activatedDate : null),
                 notes: k.notes,
                 generatedBy: k.generatedBy
             };
@@ -118,6 +131,19 @@ const getKeys = async (req, res) => {
         res.json(formatted);
     } catch (error) {
         console.error("GET KEYS ERROR:", error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
+const deleteKey = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await prisma.activationCode.delete({
+            where: { id }
+        });
+        res.json({ success: true });
+    } catch (error) {
+        console.error("DELETE KEY ERROR:", error);
         res.status(500).json({ error: error.message });
     }
 };
@@ -433,5 +459,6 @@ module.exports = {
     createRestaurant,
     deleteRestaurant,
     updateRestaurantStatus,
-    ping
+    ping,
+    deleteKey
 };

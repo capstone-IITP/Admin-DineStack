@@ -11,7 +11,8 @@ const {
     createRestaurant,
     deleteRestaurant,
     updateRestaurantStatus,
-    ping
+    ping,
+    deleteKey
 } = require("./dashboard.controller");
 
 const router = express.Router();
@@ -67,6 +68,7 @@ router.delete("/restaurants/:id", requireRole(["OWNER"]), validate(deleteRestaur
 
 // OWNER and MANAGER can manage keys/devices
 router.get("/keys", requireRole(["OWNER", "MANAGER"]), getKeys);
+router.delete("/keys/:id", requireRole(["OWNER", "MANAGER"]), deleteKey);
 router.get("/devices", requireRole(["OWNER", "MANAGER"]), getDevices);
 
 // OWNER and MANAGER can view logs (with manager logs filtered)
