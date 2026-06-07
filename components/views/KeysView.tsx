@@ -146,7 +146,7 @@ export const KeysView = ({ keys, restaurants, onGenerate, onDelete }: KeysViewPr
                         {k.activatedAt && <div>Act: {k.activatedAt.split('T')[0]}</div>}
                       </td>
                       <td className="px-6 py-4 text-right flex justify-end gap-2 items-center">
-                        <StatusBadge status={k.status} />
+                        <StatusBadge status={k.status === 'ACTIVE' ? 'READY' : k.status} />
                         <button onClick={() => onDelete(k.id)} className="text-red-500 hover:text-red-700 ml-2">
                           <XCircle size={16} />
                         </button>
