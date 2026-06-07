@@ -26,15 +26,17 @@ interface KeysViewProps {
   onDelete: (id: string) => void;
 }
 
-export const KeysView = ({ keys, onGenerate, onDelete }: KeysViewProps) => {
+export const KeysView = ({ keys, restaurants, onGenerate, onDelete }: KeysViewProps) => {
   const [restaurantName, setRestaurantName] = useState('');
   const [notes, setNotes] = useState('');
+  const [isCustomEntry, setIsCustomEntry] = useState(false);
 
   const handleGenerate = () => {
     if (!restaurantName.trim()) return;
     onGenerate(restaurantName, notes);
     setRestaurantName('');
     setNotes('');
+    setIsCustomEntry(false);
   };
 
   return (
@@ -48,13 +50,43 @@ export const KeysView = ({ keys, onGenerate, onDelete }: KeysViewProps) => {
             <div className="space-y-6">
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-widest text-[#6A6A6A] mb-2">Target Entity Name</label>
-                <input
-                  type="text"
-                  className="w-full bg-white border border-[#1F1F1F] px-3 py-2 text-xs font-mono focus:outline-none focus:border-[#8D0B41]"
-                  placeholder="e.g. The Rustic Spoon"
-                  value={restaurantName}
-                  onChange={(e) => setRestaurantName(e.target.value)}
-                />
+                {restaurants && restaurants.length > 0 && !isCustomEntry ? (
+                  <CustomSelect
+                    value={restaurantName}
+                    onChange={(val) => {
+                      if (val === '__OTHER__') {
+                        setIsCustomEntry(true);
+                        setRestaurantName('');
+                      } else {
+                        setRestaurantName(val);
+                      }
+                    }}
+                    options={[
+                      { value: '', label: 'SELECT AN ENTITY' },
+                      ...restaurants.map(r => ({ value: r.name, label: r.name })),
+                      { value: '__OTHER__', label: '+ ENTER MANUALLY' }
+                    ]}
+                  />
+                ) : (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      className="w-full bg-white border border-[#1F1F1F] px-3 py-2 text-xs font-mono focus:outline-none focus:border-[#8D0B41] pr-24"
+                      placeholder="e.g. The Rustic Spoon"
+                      value={restaurantName}
+                      onChange={(e) => setRestaurantName(e.target.value)}
+                    />
+                    {restaurants && restaurants.length > 0 && (
+                      <button 
+                        type="button"
+                        onClick={() => { setIsCustomEntry(false); setRestaurantName(''); }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold text-[#6A6A6A] hover:text-[#1F1F1F] uppercase tracking-wider"
+                      >
+                        Select List
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               
               <div>
