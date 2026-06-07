@@ -9,10 +9,8 @@ const { validate } = require("../middleware/validation.middleware");
 // Validation Schemas
 const createActivationCodeSchema = {
     body: z.object({
-        restaurantId: z.string().uuid("Invalid Restaurant ID format"),
-        plan: z.string().min(1, "Plan is required").max(50),
-        durationDays: z.number().int().positive("Duration must be a positive integer"),
-        maxTables: z.number().int().positive("Max tables must be a positive integer")
+        restaurantName: z.string().min(1, "Restaurant name is required").max(100),
+        notes: z.string().max(500).optional().nullable()
     })
 };
 
