@@ -133,8 +133,8 @@ export const KeysView = ({ keys, restaurants, onGenerate, onDelete }: KeysViewPr
                 <tbody className="divide-y divide-gray-100">
                   {keys.map((k, idx) => (
                     <tr key={idx} className="hover:bg-[#FFFFF0]">
-                      <td className="px-6 py-4 font-mono text-[#1F1F1F] text-xs font-bold select-all">
-                        {k.code}
+                      <td className="px-6 py-4 font-mono text-[#1F1F1F] text-xs font-bold">
+                        <span className="select-all">{k.code}</span>
                         {k.generatedBy && <div className="text-[10px] font-mono text-[#6A6A6A] mt-1">by: {k.generatedBy}</div>}
                       </td>
                       <td className="px-6 py-4">
