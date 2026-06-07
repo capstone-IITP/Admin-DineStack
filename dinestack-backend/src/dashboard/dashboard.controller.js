@@ -87,24 +87,37 @@ const getRestaurants = async (req, res) => {
 
 const getKeys = async (req, res) => {
     try {
+        // Auto-fix any NULL generatedAt fields from older records
+        try {
+            await prisma.$executeRaw`UPDATE "ActivationCode" SET "generatedAt" = "createdAt" WHERE "generatedAt" IS NULL`;
+        } catch (e) {
+            console.warn("Could not auto-fix generatedAt:", e.message);
+        }
+
         const keys = await prisma.activationCode.findMany({
             include: { Restaurant: true }
         });
 
-        const formatted = keys.map(k => ({
-            id: k.id,
-            code: k.code,
-            restaurant: k.restaurantName || k.entityName || "Unassigned",
-            entityId: k.restaurantId || null,
-            status: k.status,
-            created: (k.generatedAt || k.createdAt).toISOString().split('T')[0],
-            activatedAt: k.activatedAt ? k.activatedAt.toISOString() : (k.usedAt ? k.usedAt.toISOString() : null),
-            notes: k.notes,
-            generatedBy: k.generatedBy
-        }));
+        const formatted = keys.map(k => {
+            const createdDate = k.generatedAt || k.createdAt || new Date();
+            const activatedDate = k.activatedAt || k.usedAt || null;
+
+            return {
+                id: k.id,
+                code: k.code,
+                restaurant: k.restaurantName || k.entityName || "Unassigned",
+                entityId: k.restaurantId || null,
+                status: k.status,
+                created: createdDate instanceof Date ? createdDate.toISOString().split('T')[0] : "Unknown",
+                activatedAt: activatedDate instanceof Date ? activatedDate.toISOString() : null,
+                notes: k.notes,
+                generatedBy: k.generatedBy
+            };
+        });
 
         res.json(formatted);
     } catch (error) {
+        console.error("GET KEYS ERROR:", error);
         res.status(500).json({ error: error.message });
     }
 };
