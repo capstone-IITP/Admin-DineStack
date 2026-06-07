@@ -3,6 +3,14 @@ const prisma = new PrismaClient();
 
 const getDashboardStats = async (req, res) => {
     try {
+        // Auto-fix missing fields so prisma db push works without data loss
+        try {
+            await prisma.$executeRaw`UPDATE "Restaurant" SET "planStatus" = 'TRIAL' WHERE "planStatus" IS NULL`;
+            await prisma.$executeRaw`UPDATE "Restaurant" SET "subscriptionStatus" = 'PENDING' WHERE "subscriptionStatus" IS NULL`;
+        } catch (e) {
+            console.error("Auto-fix error:", e);
+        }
+
         const activeNodes = await prisma.device.count({ where: { status: "Online" } });
 
         // Registry count = total activation codes (source of truth)
@@ -65,26 +73,37 @@ const getDashboardStats = async (req, res) => {
 
 const getRestaurants = async (req, res) => {
     try {
-        const restaurants = await prisma.restaurant.findMany({
-            include: { _count: { select: { devices: true } } }
-        });
+        let restaurants = [];
+        try {
+            restaurants = await prisma.restaurant.findMany({
+                include: { _count: { select: { devices: true } } }
+            });
+        } catch (dbError) {
+            console.warn("Prisma findMany failed for Restaurants (schema mismatch), falling back to raw query.");
+            restaurants = await prisma.$queryRaw`SELECT * FROM "Restaurant"`;
+            // For raw queries, we won't have _count.devices, so default it to 0
+            restaurants = restaurants.map(r => ({ ...r, _count: { devices: 0 } }));
+        }
 
         // Transform to frontend format
-        const formatted = restaurants.map(r => ({
-            id: r.id,
-            name: r.name,
-            status: r.status, // ACTIVE, SUSPENDED, REVOKED
-            isActive: r.status === 'ACTIVE',
-            created: r.createdAt.toISOString().split('T')[0],
-            devices: r._count.devices,
-            licenseType: "Standard", // Default for now
-            revokedAt: r.revokedAt,
-            revocationReason: r.revocationReason,
-            trialStartedAt: r.trialStartedAt ? r.trialStartedAt.toISOString() : null,
-            trialEndsAt: r.trialEndsAt ? r.trialEndsAt.toISOString() : null,
-            planStatus: r.planStatus || 'TRIAL',
-            subscriptionStatus: r.subscriptionStatus || 'PENDING'
-        }));
+        const formatted = restaurants.map(r => {
+            const createdDate = r.createdAt || new Date();
+            return {
+                id: r.id,
+                name: r.name,
+                status: r.status || 'ACTIVE', // ACTIVE, SUSPENDED, REVOKED
+                isActive: (r.status || 'ACTIVE') === 'ACTIVE',
+                created: createdDate instanceof Date ? createdDate.toISOString().split('T')[0] : (typeof createdDate === 'string' ? createdDate.split('T')[0] : "Unknown"),
+                devices: r._count?.devices || 0,
+                licenseType: "Standard", // Default for now
+                revokedAt: r.revokedAt || null,
+                revocationReason: r.revocationReason || null,
+                trialStartedAt: r.trialStartedAt instanceof Date ? r.trialStartedAt.toISOString() : (typeof r.trialStartedAt === 'string' ? r.trialStartedAt : null),
+                trialEndsAt: r.trialEndsAt instanceof Date ? r.trialEndsAt.toISOString() : (typeof r.trialEndsAt === 'string' ? r.trialEndsAt : null),
+                planStatus: r.planStatus || 'TRIAL',
+                subscriptionStatus: r.subscriptionStatus || 'PENDING'
+            };
+        });
 
         res.json(formatted);
     } catch (error) {

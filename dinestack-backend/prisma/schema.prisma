@@ -85,8 +85,8 @@ model Restaurant {
   // New fields for updated Trial logic
   trialStartedAt     DateTime?
   trialEndsAt        DateTime?
-  planStatus         String           @default("TRIAL")
-  subscriptionStatus String           @default("PENDING")
+  planStatus         String?          @default("TRIAL")
+  subscriptionStatus String?          @default("PENDING")
 
   revokedAt          DateTime?
   revokedBy          String?
