@@ -100,7 +100,7 @@ model Restaurant {
   email              String?
   phone              String?
   recoveryLockUntil  DateTime?
-  clerkUserId        String?          @unique
+  ownerId            String?          @unique
   updatedAt          DateTime         @default(now())
   ApiKey             ApiKey[]
   Category           Category[]
