@@ -18,7 +18,11 @@ exports.createActivationCode = async (req, res) => {
                 restaurantName,
                 notes,
                 generatedBy: req.user.email,
-                status: 'ACTIVE'
+                status: 'ACTIVE',
+                plan: 'TRIAL',
+                durationDays: 7,
+                maxTables: 10,
+                expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
             },
         });
 
