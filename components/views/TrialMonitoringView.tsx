@@ -35,7 +35,7 @@ export const TrialMonitoringView = ({ restaurants }: TrialMonitoringViewProps) =
                 </tr>
               ) : (
                 trialRestaurants.map((r, idx) => {
-                  const endsAt = r.trialEndsAt ? new Date(r.trialEndsAt) : null;
+                  const endsAt = r.trialEndDate ? new Date(r.trialEndDate) : null;
                   const now = new Date();
                   const diffTime = endsAt ? endsAt.getTime() - now.getTime() : 0;
                   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -44,8 +44,8 @@ export const TrialMonitoringView = ({ restaurants }: TrialMonitoringViewProps) =
                   return (
                     <tr key={idx} className="hover:bg-[#FFFFF0]">
                       <td className="px-6 py-4 font-serif font-bold text-[#1F1F1F] text-sm">{r.name}</td>
-                      <td className="px-6 py-4 font-mono text-[#6A6A6A] text-xs">{r.trialStartedAt?.split('T')[0] || '---'}</td>
-                      <td className="px-6 py-4 font-mono text-[#6A6A6A] text-xs">{r.trialEndsAt?.split('T')[0] || '---'}</td>
+                      <td className="px-6 py-4 font-mono text-[#6A6A6A] text-xs">{r.activationDate?.split('T')[0] || '---'}</td>
+                      <td className="px-6 py-4 font-mono text-[#6A6A6A] text-xs">{r.trialEndDate?.split('T')[0] || '---'}</td>
                       <td className={`px-6 py-4 font-mono text-xs font-bold ${isExpired ? 'text-[#8D0B41]' : 'text-green-600'}`}>
                         {isExpired ? 'Expired' : `${diffDays} days`}
                       </td>

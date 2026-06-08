@@ -10,8 +10,8 @@ export interface Restaurant {
   created: string;
   devices: number;
   licenseType: string;
-  trialStartedAt?: string | null;
-  trialEndsAt?: string | null;
+  activationDate?: string | null;
+  trialEndDate?: string | null;
   planStatus: string;
   subscriptionStatus: string;
 }

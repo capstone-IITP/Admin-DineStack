@@ -8,8 +8,8 @@ interface Restaurant {
   created: string;
   devices: number;
   licenseType: string;
-  trialStartedAt?: string | null;
-  trialEndsAt?: string | null;
+  activationDate?: string | null;
+  trialEndDate?: string | null;
   planStatus: string;
   subscriptionStatus: string;
 }
@@ -64,7 +64,7 @@ export const RestaurantsView = ({ data, userRole, onSuspend, onNewRestaurant, on
                 <td className="px-6 py-4 font-serif font-bold text-[#1F1F1F] text-lg">{r.name}</td>
                 <td className="px-6 py-4 font-mono text-xs text-[#1F1F1F] uppercase">{r.planStatus}</td>
                 <td className="px-6 py-4 font-mono text-xs text-[#1F1F1F] uppercase">{r.subscriptionStatus}</td>
-                <td className="px-6 py-4 font-mono text-xs text-[#1F1F1F]">{r.trialEndsAt ? r.trialEndsAt.split('T')[0] : '---'}</td>
+                <td className="px-6 py-4 font-mono text-xs text-[#1F1F1F]">{r.trialEndDate ? r.trialEndDate.split('T')[0] : '---'}</td>
                 <td className="px-6 py-4 font-mono text-xs text-[#1F1F1F]">{r.devices}</td>
                 <td className="px-6 py-4"><StatusBadge status={r.status} /></td>
                 <td className="px-6 py-4 text-right">

@@ -98,8 +98,8 @@ const getRestaurants = async (req, res) => {
                 licenseType: "Standard", // Default for now
                 revokedAt: r.revokedAt || null,
                 revocationReason: r.revocationReason || null,
-                trialStartedAt: r.trialStartedAt instanceof Date ? r.trialStartedAt.toISOString() : (typeof r.trialStartedAt === 'string' ? r.trialStartedAt : null),
-                trialEndsAt: r.trialEndsAt instanceof Date ? r.trialEndsAt.toISOString() : (typeof r.trialEndsAt === 'string' ? r.trialEndsAt : null),
+                activationDate: r.activationDate instanceof Date ? r.activationDate.toISOString() : (typeof r.activationDate === 'string' ? r.activationDate : null),
+                trialEndDate: r.trialEndDate instanceof Date ? r.trialEndDate.toISOString() : (typeof r.trialEndDate === 'string' ? r.trialEndDate : null),
                 planStatus: r.planStatus || 'TRIAL',
                 subscriptionStatus: r.subscriptionStatus || 'PENDING'
             };

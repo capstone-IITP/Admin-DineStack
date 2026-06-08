@@ -122,9 +122,9 @@ exports.activateDevice = async (req, res) => {
 
         // 3. Perform Activation (Transaction) — Create Entity and Link
         const result = await prisma.$transaction(async (tx) => {
-            const trialStartedAt = new Date();
-            const trialEndsAt = new Date();
-            trialEndsAt.setDate(trialEndsAt.getDate() + 7);
+            const activationDate = new Date();
+            const trialEndDate = new Date();
+            trialEndDate.setDate(trialEndDate.getDate() + 7);
 
             // Create new restaurant
             const restaurant = await tx.restaurant.create({
@@ -132,8 +132,8 @@ exports.activateDevice = async (req, res) => {
                     name: codeRecord.restaurantName || codeRecord.entityName || "Unknown Restaurant",
                     status: 'ACTIVE',
                     isActive: true,
-                    trialStartedAt,
-                    trialEndsAt,
+                    activationDate,
+                    trialEndDate,
                     planStatus: 'TRIAL',
                     subscriptionStatus: 'PENDING'
                 }
@@ -166,7 +166,7 @@ exports.activateDevice = async (req, res) => {
                     details: 'Device activated successfully, 7-day trial started',
                     metadata: {
                         activationCode: codeRecord.code,
-                        trialEndsAt: trialEndsAt.toISOString()
+                        trialEndDate: trialEndDate.toISOString()
                     }
                 }
             });
