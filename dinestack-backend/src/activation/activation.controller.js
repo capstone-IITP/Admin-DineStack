@@ -146,10 +146,10 @@ exports.activateDevice = async (req, res) => {
             // Mark code as used
             await tx.activationCode.update({
                 where: { id: codeRecord.id },
-                data: { 
-                    status: 'USED', 
-                    isUsed: true, 
-                    activatedAt: new Date(), 
+                data: {
+                    status: 'USED',
+                    isUsed: true,
+                    activatedAt: new Date(),
                     usedAt: new Date(),
                     restaurantId: restaurant.id
                 }

@@ -122,11 +122,12 @@ const getKeys = async (req, res) => {
 
         let keys = [];
         try {
-            // This will fail if local DB is out of sync with Prisma schema
-            keys = await prisma.activationCode.findMany();
+            keys = await prisma.activationCode.findMany({
+                orderBy: { createdAt: 'desc' },
+                include: { restaurant: { select: { name: true } } }
+            });
         } catch (dbError) {
             console.warn("Prisma findMany failed (likely schema mismatch), falling back to raw query:", dbError.message);
-            // Fallback to raw query which ignores missing schema columns
             keys = await prisma.$queryRaw`SELECT * FROM "ActivationCode"`;
         }
 
@@ -137,7 +138,7 @@ const getKeys = async (req, res) => {
             return {
                 id: k.id,
                 code: k.code,
-                restaurant: k.restaurantName || k.entityName || "Unassigned",
+                restaurant: k.restaurantName || k.entityName || (k.restaurant ? k.restaurant.name : "Unassigned"),
                 entityId: k.restaurantId || null,
                 status: k.status,
                 created: createdDate instanceof Date ? createdDate.toISOString().split('T')[0] : (typeof createdDate === 'string' ? createdDate.split('T')[0] : "Unknown"),
