@@ -16,6 +16,7 @@ exports.createActivationCode = async (req, res) => {
             data: {
                 code,
                 restaurantName,
+                entityName: restaurantName,
                 notes,
                 generatedBy: req.user.email,
                 status: 'ACTIVE',
