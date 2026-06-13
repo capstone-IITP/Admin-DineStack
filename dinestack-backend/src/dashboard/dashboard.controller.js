@@ -3,58 +3,37 @@ const prisma = new PrismaClient();
 
 const getDashboardStats = async (req, res) => {
     try {
-        // Auto-fix missing fields so prisma db push works without data loss
+        // Auto-fix missing fields
         try {
             await prisma.$executeRaw`UPDATE "Restaurant" SET "planStatus" = 'TRIAL' WHERE "planStatus" IS NULL`;
             await prisma.$executeRaw`UPDATE "Restaurant" SET "subscriptionStatus" = 'PENDING' WHERE "subscriptionStatus" IS NULL`;
-        } catch (e) {
-            console.error("Auto-fix error:", e);
-        }
+        } catch (e) { }
 
-        const activeNodes = await prisma.device.count({ where: { status: "Online" } });
+        let activeNodes = 0;
+        try { activeNodes = await prisma.device.count({ where: { status: "Online" } }); } catch (e) { console.error("Error activeNodes", e.message); }
 
-        // Registry count = total activation codes (source of truth)
-        const registryCount = await prisma.activationCode.count();
+        let registryCount = 0;
+        try { registryCount = await prisma.activationCode.count(); } catch (e) { console.error("Error registryCount", e.message); }
 
+        let usedLicenses = 0;
+        try { usedLicenses = await prisma.activationCode.count({ where: { isUsed: true } }); } catch (e) { console.error("Error usedLicenses", e.message); }
+
+        let availableLicenses = 0;
+        try { 
+            availableLicenses = await prisma.activationCode.count({
+                where: { isUsed: false, status: 'ACTIVE', expiresAt: { gte: new Date() } }
+            }); 
+        } catch (e) { console.error("Error availableLicenses", e.message); }
+
+        let licensesIssued24h = 0;
         try {
-            const rawKeys = await prisma.$queryRaw`SELECT * FROM "ActivationCode"`;
-            require('fs').writeFileSync('e:\\OneDrive\\Desktop\\DineStack Admin\\dinestack-backend\\debug.json', JSON.stringify(rawKeys, null, 2));
-        } catch (e) {
-            require('fs').writeFileSync('e:\\OneDrive\\Desktop\\DineStack Admin\\dinestack-backend\\debug.json', JSON.stringify({ error: e.message }));
-        }
+            licensesIssued24h = await prisma.activationCode.count({
+                where: { createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }
+            });
+        } catch (e) { console.error("Error licensesIssued24h", e.message); }
 
-        // Used licenses = activation codes that have been consumed
-        const usedLicenses = await prisma.activationCode.count({
-            where: { isUsed: true }
-        });
-
-        // Available licenses = unused codes with ACTIVE status (not INVALIDATED or expired)
-        const availableLicenses = await prisma.activationCode.count({
-            where: {
-                isUsed: false,
-                status: 'ACTIVE',
-                expiresAt: { gte: new Date() }
-            }
-        });
-
-        const rawAllCodes = await prisma.activationCode.count();
-        console.log("DEBUG RAW COUNT:", rawAllCodes);
-
-        const licensesIssued24h = await prisma.activationCode.count({
-            where: {
-                createdAt: {
-                    gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
-                }
-            }
-        });
-        const incidents = await prisma.auditLog.count({ where: { action: "ERROR" } });
-
-        console.log("Dashboard Stats Debug:", {
-            registryCount,
-            usedLicenses,
-            availableLicenses,
-            licensesIssued24h
-        });
+        let incidents = 0;
+        try { incidents = await prisma.auditLog.count({ where: { action: "ERROR" } }); } catch (e) { console.error("Error incidents", e.message); }
 
         res.json({
             apiGateway: "ONLINE",
@@ -67,6 +46,7 @@ const getDashboardStats = async (req, res) => {
             licensesIssued24h
         });
     } catch (error) {
+        console.error("DASHBOARD CRASH:", error);
         res.status(500).json({ error: error.message });
     }
 };

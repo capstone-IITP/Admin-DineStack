@@ -5,12 +5,10 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "update-schema": "node download-schema.js",
-    "prisma:setup": "npm run update-schema && npx prisma generate",
     "start": "node src/server.js",
-    "dev": "npm run prisma:setup && nodemon src/server.js",
-    "postinstall": "npm run prisma:setup",
-    "vercel-build": "prisma db push --skip-generate && npm run prisma:setup"
+    "dev": "nodemon src/server.js",
+    "postinstall": "prisma generate",
+    "vercel-build": "prisma db push --skip-generate"
   },
   "keywords": [],
   "author": "",
