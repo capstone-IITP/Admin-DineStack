@@ -126,19 +126,36 @@ exports.loginSuperAdmin = async (req, res) => {
 
         // If 2FA is enabled, issue a temp token instead of a real session
         if (admin.twoFactorEnabled) {
-            const tempToken = jwt.sign(
-                { adminId: admin.id, purpose: "2fa-verify" },
-                process.env.JWT_SECRET,
-                { expiresIn: "5m" }
-            );
+            let bypass2FA = false;
+            
+            // Check for valid 2fa_remember cookie
+            const rememberToken = req.cookies?.['2fa_remember'];
+            if (rememberToken) {
+                try {
+                    const decoded = jwt.verify(rememberToken, process.env.JWT_SECRET);
+                    if (decoded.adminId === admin.id && decoded.purpose === '2fa-remember') {
+                        bypass2FA = true;
+                    }
+                } catch (err) {
+                    // Token invalid or expired, do not bypass
+                }
+            }
 
-            await logAudit(admin.id, "LOGIN_2FA_PENDING", null);
+            if (!bypass2FA) {
+                const tempToken = jwt.sign(
+                    { adminId: admin.id, purpose: "2fa-verify" },
+                    process.env.JWT_SECRET,
+                    { expiresIn: "5m" }
+                );
 
-            // DO NOT reset failedAttempts or set lastLogin yet
-            return res.json({
-                requires2FA: true,
-                tempToken
-            });
+                await logAudit(admin.id, "LOGIN_2FA_PENDING", null);
+
+                // DO NOT reset failedAttempts or set lastLogin yet
+                return res.json({
+                    requires2FA: true,
+                    tempToken
+                });
+            }
         }
 
         // --- No 2FA — create session normally ---
@@ -335,6 +352,7 @@ exports.logoutSuperAdmin = async (req, res) => {
         res.clearCookie("access_token", { path: "/" });
         res.clearCookie("refresh_token", { path: "/" });
         res.clearCookie("csrf_token", { path: "/" });
+        res.clearCookie("2fa_remember", { path: "/" });
 
         res.json({ message: "Logged out successfully" });
     } catch (err) {

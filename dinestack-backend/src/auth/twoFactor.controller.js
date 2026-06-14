@@ -429,6 +429,20 @@ exports.verifyLogin2FA = async (req, res) => {
         res.cookie("refresh_token", rawRefreshToken, getRefreshCookieOptions());
         res.cookie("csrf_token", csrfToken, getCsrfCookieOptions());
 
+        // Automatically remember device for 24 hours
+        const rememberToken = jwt.sign(
+            { adminId: admin.id, purpose: "2fa-remember" },
+            process.env.JWT_SECRET,
+            { expiresIn: "24h" }
+        );
+        res.cookie("2fa_remember", rememberToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+            path: "/",
+            maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        });
+
         res.json({
             admin: {
                 id: admin.id,
