@@ -10,6 +10,10 @@ exports.createActivationCode = async (req, res) => {
             return res.status(400).json({ message: "Restaurant name is required" });
         }
 
+        const existingRestaurant = await prisma.restaurant.findFirst({
+            where: { name: restaurantName }
+        });
+
         const code = generateCode();
 
         const activationCode = await prisma.activationCode.create({
@@ -17,6 +21,7 @@ exports.createActivationCode = async (req, res) => {
                 code,
                 restaurantName,
                 entityName: restaurantName,
+                restaurantId: existingRestaurant ? existingRestaurant.id : null,
                 notes,
                 generatedBy: req.user.email,
                 status: 'ACTIVE',
@@ -129,18 +134,51 @@ exports.activateDevice = async (req, res) => {
         const result = await prisma.$transaction(async (tx) => {
             const activationDate = new Date();
             const trialEndDate = new Date();
-            trialEndDate.setDate(trialEndDate.getDate() + 7);
+            // Use durationDays from the activation code, default to 7 if missing
+            const duration = codeRecord.durationDays || 7;
+            trialEndDate.setDate(trialEndDate.getDate() + duration);
 
-            // Create new restaurant
-            const restaurant = await tx.restaurant.create({
+            // Determine statuses based on plan
+            const planStatus = codeRecord.plan || 'TRIAL';
+            const subscriptionStatus = planStatus === 'TRIAL' ? 'PENDING' : 'ACTIVE';
+
+            let restaurant;
+            if (codeRecord.restaurantId) {
+                // Update existing restaurant
+                restaurant = await tx.restaurant.update({
+                    where: { id: codeRecord.restaurantId },
+                    data: {
+                        status: 'ACTIVE',
+                        isActive: true,
+                        activationDate,
+                        trialEndDate,
+                        planStatus,
+                        subscriptionStatus
+                    }
+                });
+            } else {
+                // Create new restaurant if it wasn't pre-linked
+                restaurant = await tx.restaurant.create({
+                    data: {
+                        name: codeRecord.restaurantName || codeRecord.entityName || "Unknown Restaurant",
+                        status: 'ACTIVE',
+                        isActive: true,
+                        activationDate,
+                        trialEndDate,
+                        planStatus,
+                        subscriptionStatus
+                    }
+                });
+            }
+
+            // Auto-register the primary device
+            await tx.device.create({
                 data: {
-                    name: codeRecord.restaurantName || codeRecord.entityName || "Unknown Restaurant",
-                    status: 'ACTIVE',
-                    isActive: true,
-                    activationDate,
-                    trialEndDate,
-                    planStatus: 'TRIAL',
-                    subscriptionStatus: 'PENDING'
+                    restaurantId: restaurant.id,
+                    deviceName: "Primary Node",
+                    deviceId: "sys-" + restaurant.id.substring(0, 8),
+                    status: "Online",
+                    lastSeen: new Date()
                 }
             });
 
@@ -168,10 +206,11 @@ exports.activateDevice = async (req, res) => {
                     action: 'DEVICE_ACTIVATED',
                     actor: 'DEVICE',
                     target: `Restaurant:${restaurant.id}`,
-                    details: 'Device activated successfully, 7-day trial started',
+                    details: `Device activated successfully, ${duration}-day ${planStatus} plan started`,
                     metadata: {
                         activationCode: codeRecord.code,
-                        trialEndDate: trialEndDate.toISOString()
+                        trialEndDate: trialEndDate.toISOString(),
+                        plan: planStatus
                     }
                 }
             });
