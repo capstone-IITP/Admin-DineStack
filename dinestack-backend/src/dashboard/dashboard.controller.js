@@ -138,9 +138,33 @@ const getKeys = async (req, res) => {
 const deleteKey = async (req, res) => {
     try {
         const { id } = req.params;
-        await prisma.activationCode.delete({
-            where: { id }
+
+        await prisma.$transaction(async (tx) => {
+            // 1. Clear circular reference from any restaurant pointing to this key
+            await tx.restaurant.updateMany({
+                where: { activationCodeId: id },
+                data: { activationCodeId: null }
+            });
+
+            // 2. Delete the key
+            await tx.activationCode.delete({
+                where: { id }
+            });
+            
+            // 3. Log the deletion
+            if (req.user && req.user.email) {
+                await tx.auditLog.create({
+                    data: {
+                        action: 'KEY_DELETE',
+                        actor: req.user.email,
+                        target: `ActivationCode:${id}`,
+                        details: `Deleted activation key from dashboard`,
+                        severity: 'WARNING'
+                    }
+                });
+            }
         });
+
         res.json({ success: true });
     } catch (error) {
         console.error("DELETE KEY ERROR:", error);

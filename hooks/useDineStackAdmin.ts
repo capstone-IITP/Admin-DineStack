@@ -511,9 +511,13 @@ export function useDineStackAdmin() {
       if (res.ok) {
         addLog('KEY_DELETE', keyToDelete, 'Deleted activation key');
         fetchData();
+      } else {
+        const parsed = await api.safeJsonParse(res);
+        showAlert("Failed to delete key", parsed.data?.message || parsed.data?.error || 'Unknown error', 'error');
       }
     } catch (err) {
       console.error(err);
+      showAlert("Failed to delete key", "A network or server error occurred.", 'error');
     } finally {
       setDeleteModalOpen(false);
       setKeyToDelete(null);
