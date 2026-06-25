@@ -360,17 +360,17 @@ const deleteRestaurant = async (req, res) => {
             // 11. Delete Devices
             await tx.device.deleteMany({ where: { restaurantId: id } });
 
-            // Delete ApiKeys (Table does not exist)
-            // await tx.apiKey.deleteMany({ where: { restaurantId: id } });
+            // Delete ApiKeys
+            await tx.apiKey.deleteMany({ where: { restaurantId: id } });
 
             // Delete RefreshTokens
             await tx.refreshToken.deleteMany({ where: { restaurantId: id } });
 
-            // Delete Subscriptions (Table does not exist)
-            // await tx.subscription.deleteMany({ where: { restaurantId: id } });
+            // Delete Subscriptions
+            await tx.subscription.deleteMany({ where: { restaurantId: id } });
 
-            // Delete Payments (Table does not exist)
-            // await tx.payment.deleteMany({ where: { restaurantId: id } });
+            // Delete Payments
+            await tx.payment.deleteMany({ where: { restaurantId: id } });
 
             // 12. Clear circular reference
             await tx.restaurant.update({
