@@ -43,12 +43,16 @@ jobs:
         run: npm ci --prefix dinestack-backend
 
       - name: Verify Prisma Schema Validation
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: |
           npx prisma validate --schema=dinestack-backend/prisma/schema.prisma
 
       - name: Dry-Run Database Migrations
         env:
-          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/dinestack_test?schema=public
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: |
           npx prisma migrate dev --name ci_dry_run --schema=dinestack-backend/prisma/schema.prisma --create-only
           npx prisma migrate status --schema=dinestack-backend/prisma/schema.prisma
