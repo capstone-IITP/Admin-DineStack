@@ -115,6 +115,11 @@ exports.updateTeamMember = async (req, res) => {
             return res.status(404).json({ message: "Staff member not found" });
         }
 
+        // Prevent non-OWNER from modifying OWNER accounts
+        if (req.user.role !== 'OWNER' && targetUser.role === 'OWNER') {
+            return res.status(403).json({ message: "Cannot modify an OWNER account" });
+        }
+
         const ip = req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
         const ua = req.headers["user-agent"] || "unknown";
 
@@ -130,6 +135,11 @@ exports.updateTeamMember = async (req, res) => {
 
             if (id === req.user.id && role !== targetUser.role) {
                 return res.status(400).json({ message: "You cannot change your own role" });
+            }
+
+            // Prevent non-OWNER from assigning OWNER role
+            if (role === 'OWNER' && req.user.role !== 'OWNER') {
+                return res.status(403).json({ message: "Only OWNER can assign OWNER role" });
             }
 
             if (role !== targetUser.role) {

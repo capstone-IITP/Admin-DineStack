@@ -12,7 +12,10 @@ const {
 // Validation Schemas
 const activateDeviceSchema = {
     body: z.object({
-        activationCode: z.string().min(1, "Activation code is required")
+        activationCode: z.string().regex(
+            /^DINE-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/,
+            "Activation code must match format DINE-XXXX-XXXX-XXXX"
+        )
     })
 };
 

@@ -50,19 +50,24 @@ app.use((req, res, next) => {
 // 0b. Validate Content-Type for state-changing requests
 app.use((req, res, next) => {
     if (["POST", "PUT", "PATCH"].includes(req.method)) {
-        const contentType = req.headers["content-type"] || "";
-        if (!contentType.startsWith("application/json")) {
-            return res.status(415).json({
-                error: "Unsupported Media Type. Content-Type must be application/json"
-            });
+        const contentLength = req.headers["content-length"];
+        if (contentLength && contentLength !== "0") {
+            const contentType = req.headers["content-type"] || "";
+            if (!contentType.startsWith("application/json")) {
+                return res.status(415).json({
+                    error: "Unsupported Media Type. Content-Type must be application/json"
+                });
+            }
         }
     }
     next();
 });
 
-// 1. CSP Nonce Generation Middleware
+// 1. CSP Nonce and Request ID Middleware
 app.use((req, res, next) => {
     res.locals.cspNonce = crypto.randomBytes(16).toString("base64");
+    req.id = req.headers['x-request-id'] || uuidv4();
+    res.setHeader('X-Request-ID', req.id);
     next();
 });
 
@@ -71,6 +76,8 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
+            baseUri: ["'self'"],
+            formAction: ["'self'"],
             scriptSrc: ["'self'", (req, res) => `'nonce-${res.locals.cspNonce}'`],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
@@ -81,6 +88,7 @@ app.use(helmet({
         },
     },
     crossOriginEmbedderPolicy: false,
+    permittedCrossDomainPolicies: { permittedPolicies: "none" },
     frameguard: { action: "deny" },
     referrerPolicy: { policy: "strict-origin" },
     hsts: {
@@ -130,7 +138,7 @@ app.use((req, res, next) => {
     });
 });
 
-app.use(express.json());
+app.use(express.json({ limit: "100kb" }));
 app.use(cookieParser());
 
 // 4. Database-ping Health Check Endpoints
@@ -205,7 +213,7 @@ app.use((err, req, res, next) => {
 });
 
 app.use((req, res) => {
-    res.status(404).json({ error: "Route not found", path: req.originalUrl });
+    res.status(404).json({ error: "Route not found" });
 });
 
 module.exports = app;

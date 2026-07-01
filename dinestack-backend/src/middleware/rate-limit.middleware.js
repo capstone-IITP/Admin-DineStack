@@ -77,3 +77,24 @@ exports.couponLimiter = createLimiter("coupon", {
     max: isProd ? 15 : 100,
     message: { error: "Too many coupon requests, please try again after 15 minutes" }
 });
+
+// 10 requests per 15 minutes for admin activation code generation
+exports.codeGenLimiter = createLimiter("codeGen", {
+    windowMs: 15 * 60 * 1000,
+    max: isProd ? 10 : 100,
+    message: { error: "Too many code generation requests, please try again after 15 minutes" }
+});
+
+// 30 requests per minute for admin write operations (create/update/delete)
+exports.adminWriteLimiter = createLimiter("adminWrite", {
+    windowMs: 60 * 1000,
+    max: isProd ? 30 : 200,
+    message: { error: "Too many write requests, please slow down" }
+});
+
+// 5 requests per 15 minutes for pair code generation
+exports.pairCodeLimiter = createLimiter("pairCode", {
+    windowMs: 15 * 60 * 1000,
+    max: isProd ? 5 : 100,
+    message: { error: "Too many pair code requests, please try again after 15 minutes" }
+});

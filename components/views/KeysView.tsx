@@ -17,6 +17,9 @@ interface LicenseKey {
   activatedAt?: string | null;
   notes?: string | null;
   generatedBy?: string | null;
+  revokedAt?: string | null;
+  revokedBy?: string | null;
+  revokeReason?: string | null;
 }
 
 interface KeysViewProps {
@@ -140,6 +143,13 @@ export const KeysView = ({ keys, restaurants, onGenerate, onDelete }: KeysViewPr
                       <td className="px-6 py-4">
                         <div className="font-serif text-[#1F1F1F]">{k.restaurant}</div>
                         {k.notes && <div className="text-[10px] font-mono text-[#6A6A6A] mt-1 truncate max-w-[150px]" title={k.notes}>{k.notes}</div>}
+                        {k.status === 'REVOKED' && (
+                          <div className="text-[10px] font-mono text-[#8D0B41] mt-1 space-y-0.5">
+                            {k.revokedBy && <div>By: {k.revokedBy}</div>}
+                            {k.revokedAt && <div>At: {new Date(k.revokedAt).toLocaleDateString()}</div>}
+                            {k.revokeReason && <div>Reason: {k.revokeReason}</div>}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 font-mono text-[10px] text-[#6A6A6A]">
                         <div>Gen: {k.created}</div>
@@ -147,9 +157,11 @@ export const KeysView = ({ keys, restaurants, onGenerate, onDelete }: KeysViewPr
                       </td>
                       <td className="px-6 py-4 text-right flex justify-end gap-2 items-center">
                         <StatusBadge status={k.status === 'ACTIVE' ? 'READY' : k.status} />
-                        <button onClick={() => onDelete(k.id)} className="text-red-500 hover:text-red-700 ml-2">
-                          <XCircle size={16} />
-                        </button>
+                        {k.status !== 'USED' && k.status !== 'REVOKED' && k.status !== 'EXPIRED' && (
+                          <button onClick={() => onDelete(k.id)} className="text-red-500 hover:text-red-700 ml-2" title="Revoke">
+                            <XCircle size={16} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

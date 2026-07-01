@@ -4,6 +4,7 @@ const router = Router = express.Router();
 const { getAllTeamMembers, createTeamMember, updateTeamMember, deleteTeamMember } = require("./team.controller");
 const { requireSuperAdmin, requireRole } = require("../auth/auth.middleware");
 const { validate } = require("../middleware/validation.middleware");
+const { adminWriteLimiter } = require("../middleware/rate-limit.middleware");
 
 // Validation Schemas
 const createTeamSchema = {
@@ -37,8 +38,8 @@ router.use(requireRole(["OWNER"]));
 
 // Endpoints
 router.get("/", getAllTeamMembers);
-router.post("/", validate(createTeamSchema), createTeamMember);
-router.put("/:id", validate(updateTeamSchema), updateTeamMember);
-router.delete("/:id", validate(deleteTeamSchema), deleteTeamMember);
+router.post("/", adminWriteLimiter, validate(createTeamSchema), createTeamMember);
+router.put("/:id", adminWriteLimiter, validate(updateTeamSchema), updateTeamMember);
+router.delete("/:id", adminWriteLimiter, validate(deleteTeamSchema), deleteTeamMember);
 
 module.exports = router;

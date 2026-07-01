@@ -29,7 +29,10 @@ exports.requireSuperAdmin = async (req, res, next) => {
         // 2. Verify JWT
         let decoded;
         try {
-            decoded = jwt.verify(token, process.env.JWT_SECRET);
+            decoded = jwt.verify(token, process.env.JWT_SECRET, {
+                issuer: "dinestack-admin",
+                audience: "dinestack-api"
+            });
         } catch (err) {
             if (err.name === "TokenExpiredError") {
                 return res.status(401).json({
