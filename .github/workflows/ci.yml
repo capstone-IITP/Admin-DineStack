@@ -49,12 +49,12 @@ jobs:
         run: |
           npx prisma validate --schema=dinestack-backend/prisma/schema.prisma
 
-      - name: Dry-Run Database Migrations
+      - name: Deploy Database Migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
         run: |
-          npx prisma migrate dev --name ci_dry_run --schema=dinestack-backend/prisma/schema.prisma --create-only
+          npx prisma migrate deploy --schema=dinestack-backend/prisma/schema.prisma
           npx prisma migrate status --schema=dinestack-backend/prisma/schema.prisma
 
       - name: Run ESLint Checks
