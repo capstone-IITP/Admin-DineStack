@@ -382,7 +382,7 @@ exports.verifyLogin2FA = async (req, res) => {
 
         // Generate access token
         const accessToken = jwt.sign(
-            { adminId: admin.id, role: "SUPER_ADMIN", subRole: admin.role, csrfToken },
+            { adminId: admin.id, role: "SUPER_ADMIN", subRole: admin.role, csrfToken, iss: "dinestack-admin", aud: "dinestack-api" },
             process.env.JWT_SECRET,
             { expiresIn: ACCESS_TOKEN_EXPIRY }
         );

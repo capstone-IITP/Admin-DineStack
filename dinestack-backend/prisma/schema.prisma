@@ -56,6 +56,11 @@ model ActivationCode {
   activatedAt    DateTime?
   generatedBy    String?
 
+  // Revocation metadata (populated on soft-revoke)
+  revokedAt      DateTime?
+  revokedBy      String?
+  revokeReason   String?
+
   @@index([restaurantId])
 }
 

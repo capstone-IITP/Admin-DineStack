@@ -14,6 +14,7 @@ const {
     ping,
     deleteKey
 } = require("./dashboard.controller");
+const { adminWriteLimiter } = require("../middleware/rate-limit.middleware");
 
 const router = express.Router();
 
@@ -53,6 +54,12 @@ const deleteRestaurantSchema = {
     })
 };
 
+const deleteKeySchema = {
+    params: z.object({
+        id: z.string().uuid("Invalid Key ID format")
+    })
+};
+
 router.use(requireSuperAdmin);
 
 router.get("/ping", ping);
@@ -60,15 +67,15 @@ router.get("/stats", getDashboardStats);
 router.get("/restaurants", getRestaurants);
 
 // OWNER and MANAGER can create entities and update status
-router.post("/restaurants", requireRole(["OWNER", "MANAGER"]), validate(createRestaurantSchema), createRestaurant);
-router.patch("/restaurants/:id/status", requireRole(["OWNER", "MANAGER"]), validate(updateRestaurantStatusSchema), updateRestaurantStatus);
+router.post("/restaurants", adminWriteLimiter, requireRole(["OWNER", "MANAGER"]), validate(createRestaurantSchema), createRestaurant);
+router.patch("/restaurants/:id/status", adminWriteLimiter, requireRole(["OWNER", "MANAGER"]), validate(updateRestaurantStatusSchema), updateRestaurantStatus);
 
 // Only OWNER can soft-delete/deactivate entities
-router.delete("/restaurants/:id", requireRole(["OWNER"]), validate(deleteRestaurantSchema), deleteRestaurant);
+router.delete("/restaurants/:id", adminWriteLimiter, requireRole(["OWNER"]), validate(deleteRestaurantSchema), deleteRestaurant);
 
 // OWNER and MANAGER can manage keys/devices
 router.get("/keys", requireRole(["OWNER", "MANAGER"]), getKeys);
-router.delete("/keys/:id", requireRole(["OWNER", "MANAGER"]), deleteKey);
+router.delete("/keys/:id", adminWriteLimiter, requireRole(["OWNER", "MANAGER"]), validate(deleteKeySchema), deleteKey);
 router.get("/devices", requireRole(["OWNER", "MANAGER"]), getDevices);
 
 // OWNER and MANAGER can view logs (with manager logs filtered)

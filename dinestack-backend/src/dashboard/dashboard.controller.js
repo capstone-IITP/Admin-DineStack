@@ -47,7 +47,7 @@ const getDashboardStats = async (req, res) => {
         });
     } catch (error) {
         console.error("DASHBOARD CRASH:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Failed to load dashboard stats" });
     }
 };
 
@@ -87,7 +87,7 @@ const getRestaurants = async (req, res) => {
 
         res.json(formatted);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Failed to fetch restaurants" });
     }
 };
 
@@ -117,21 +117,26 @@ const getKeys = async (req, res) => {
 
             return {
                 id: k.id,
-                code: k.code,
+                code: (k.status === 'USED' || k.status === 'REVOKED' || k.status === 'EXPIRED')
+                    ? `${k.code.substring(0, 9)}****-****`
+                    : k.code,
                 restaurant: k.restaurantName || k.entityName || (k.restaurant ? k.restaurant.name : "Unassigned"),
                 entityId: k.restaurantId || null,
                 status: k.status,
                 created: createdDate instanceof Date ? createdDate.toISOString().split('T')[0] : (typeof createdDate === 'string' ? createdDate.split('T')[0] : "Unknown"),
                 activatedAt: activatedDate instanceof Date ? activatedDate.toISOString() : (typeof activatedDate === 'string' ? activatedDate : null),
                 notes: k.notes,
-                generatedBy: k.generatedBy
+                generatedBy: k.generatedBy,
+                revokedAt: k.revokedAt ? k.revokedAt.toISOString() : null,
+                revokedBy: k.revokedBy || null,
+                revokeReason: k.revokeReason || null
             };
         });
 
         res.json(formatted);
     } catch (error) {
         console.error("GET KEYS ERROR:", error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Failed to fetch activation keys" });
     }
 };
 
@@ -139,36 +144,50 @@ const deleteKey = async (req, res) => {
     try {
         const { id } = req.params;
 
+        const keyRecord = await prisma.activationCode.findUnique({ where: { id } });
+        if (!keyRecord) {
+            return res.status(404).json({ error: "Activation key not found" });
+        }
+        if (keyRecord.status === 'USED') {
+            return res.status(400).json({ error: "Cannot revoke a used activation code" });
+        }
+        if (keyRecord.status === 'REVOKED') {
+            return res.status(409).json({ error: "Activation code is already revoked" });
+        }
+
         await prisma.$transaction(async (tx) => {
-            // 1. Clear circular reference from any restaurant pointing to this key
-            await tx.restaurant.updateMany({
-                where: { activationCodeId: id },
-                data: { activationCodeId: null }
+            await tx.activationCode.update({
+                where: { id },
+                data: {
+                    status: 'REVOKED',
+                    revokedAt: new Date(),
+                    revokedBy: req.user?.email || 'SYSTEM',
+                    revokeReason: 'Revoked from dashboard'
+                }
             });
 
-            // 2. Delete the key
-            await tx.activationCode.delete({
-                where: { id }
-            });
-            
-            // 3. Log the deletion
             if (req.user && req.user.email) {
                 await tx.auditLog.create({
                     data: {
-                        action: 'KEY_DELETE',
+                        action: 'KEY_REVOKE',
                         actor: req.user.email,
                         target: `ActivationCode:${id}`,
-                        details: `Deleted activation key from dashboard`,
-                        severity: 'WARNING'
+                        details: `Revoked activation key from dashboard`,
+                        severity: 'WARNING',
+                        metadata: JSON.stringify({
+                            revokedAt: new Date().toISOString(),
+                            revokedBy: req.user.email,
+                            revokeReason: 'Revoked from dashboard'
+                        })
                     }
                 });
             }
         });
 
-        res.json({ success: true });
+        res.json({ success: true, message: "Activation code revoked" });
     } catch (error) {
-        console.error("DELETE KEY ERROR:", error);
-        res.status(500).json({ error: error.message });
+        console.error("Revoke key error:", error);
+        res.status(500).json({ error: "Failed to revoke key" });
     }
 };
 
@@ -284,7 +303,7 @@ const createRestaurant = async (req, res) => {
         const existing = await prisma.restaurant.findUnique({ where: { name } });
         if (existing) {
             return res.status(409).json({
-                message: `Entity with name "${name}" already exists (ID: ${existing.id}). Use the existing entity instead.`
+                message: `An entity with this name already exists. Use the existing entity instead.`
             });
         }
 
@@ -292,6 +311,16 @@ const createRestaurant = async (req, res) => {
             data: {
                 name,
                 isActive: true
+            }
+        });
+
+        await prisma.auditLog.create({
+            data: {
+                action: 'ENTITY_CREATE',
+                actor: req.user.email,
+                target: `Restaurant:${restaurant.id}`,
+                details: `Created restaurant "${name}"`,
+                severity: 'INFO'
             }
         });
 
@@ -403,7 +432,7 @@ const deleteRestaurant = async (req, res) => {
 
         res.json({ message: "Restaurant deleted successfully", restaurant: result });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Failed to delete restaurant" });
     }
 };
 
@@ -466,7 +495,7 @@ const updateRestaurantStatus = async (req, res) => {
 
         res.json(result);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: "Failed to update restaurant status" });
     }
 };
 

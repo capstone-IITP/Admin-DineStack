@@ -1,6 +1,7 @@
 const prisma = require("../prisma");
 const generateCode = require("./code.util");
 const bcrypt = require("bcrypt");
+const { stripHtmlTags } = require("../utils/sanitize.util");
 
 exports.createActivationCode = async (req, res) => {
     try {
@@ -14,6 +15,23 @@ exports.createActivationCode = async (req, res) => {
             where: { name: restaurantName }
         });
 
+        if (existingRestaurant) {
+            const existingActive = await prisma.activationCode.findFirst({
+                where: {
+                    restaurantId: existingRestaurant.id,
+                    status: 'ACTIVE',
+                    isUsed: false
+                }
+            });
+            if (existingActive) {
+                return res.status(409).json({
+                    message: "An active activation code already exists for this restaurant. Revoke it first."
+                });
+            }
+        }
+
+        const sanitizedNotes = notes ? stripHtmlTags(notes) : null;
+
         const code = generateCode();
 
         const activationCode = await prisma.activationCode.create({
@@ -22,7 +40,7 @@ exports.createActivationCode = async (req, res) => {
                 restaurantName,
                 entityName: restaurantName,
                 restaurantId: existingRestaurant ? existingRestaurant.id : null,
-                notes,
+                notes: sanitizedNotes,
                 generatedBy: req.user.email,
                 status: 'ACTIVE',
                 plan: 'TRIAL',
@@ -69,38 +87,55 @@ exports.deleteActivationCode = async (req, res) => {
     try {
         const { id } = req.params;
         const code = await prisma.activationCode.findUnique({ where: { id } });
+        
         if (!code) {
             return res.status(404).json({ message: "Activation code not found" });
         }
 
+        // Used codes are historical records — never revoke them
+        if (code.status === 'USED') {
+            return res.status(400).json({ message: "Cannot revoke a used activation code" });
+        }
+
+        // Already revoked
+        if (code.status === 'REVOKED') {
+            return res.status(409).json({ message: "Activation code is already revoked" });
+        }
+
+        const revokeReason = req.body?.reason || null;
+        const sanitizedReason = revokeReason ? stripHtmlTags(revokeReason) : null;
+
         await prisma.$transaction(async (tx) => {
-            // 1. Clear circular FK reference in Restaurant
-            await tx.restaurant.updateMany({
-                where: { activationCodeId: id },
-                data: { activationCodeId: null }
+            await tx.activationCode.update({
+                where: { id },
+                data: {
+                    status: 'REVOKED',
+                    revokedAt: new Date(),
+                    revokedBy: req.user.email,
+                    revokeReason: sanitizedReason
+                }
             });
 
-            // 2. Hard delete ActivationCode
-            await tx.activationCode.delete({
-                where: { id }
-            });
-
-            // 3. Log hard delete audit
             await tx.auditLog.create({
                 data: {
-                    action: 'KEY_DELETE',
+                    action: 'KEY_REVOKE',
                     actor: req.user.email,
-                    target: `ActivationCode:${code.code}`,
-                    details: `Hard deleted activation key for restaurant ID ${code.restaurantId}`,
-                    severity: 'CRITICAL'
+                    target: `ActivationCode:${id}`,
+                    details: `Revoked activation code for ${code.restaurantName || 'unknown restaurant'}`,
+                    severity: 'WARNING',
+                    metadata: JSON.stringify({
+                        revokedAt: new Date().toISOString(),
+                        revokedBy: req.user.email,
+                        revokeReason: sanitizedReason || null
+                    })
                 }
             });
         });
 
-        res.json({ message: "Activation code deleted successfully" });
+        res.json({ success: true, message: "Activation code revoked successfully" });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: "Failed to delete activation code" });
+        console.error("Revoke activation code error:", error);
+        res.status(500).json({ message: "Failed to revoke activation code" });
     }
 };
 
@@ -121,6 +156,15 @@ exports.activateDevice = async (req, res) => {
             return res.status(401).json({ error: "Invalid activation code" });
         }
 
+        // Check expiry — auto-expire and reject
+        if (codeRecord.expiresAt && new Date(codeRecord.expiresAt) < new Date()) {
+            await prisma.activationCode.update({
+                where: { id: codeRecord.id },
+                data: { status: 'EXPIRED' }
+            });
+            return res.status(410).json({ error: "Activation code has expired" });
+        }
+
         // 2. Security Checks
         if (codeRecord.status === 'USED' || codeRecord.isUsed) {
             return res.status(409).json({ error: "Activation code already used" });
@@ -128,6 +172,9 @@ exports.activateDevice = async (req, res) => {
 
         if (codeRecord.status === 'REVOKED' || codeRecord.status === 'INVALIDATED') {
             return res.status(401).json({ error: "Activation code has been revoked" });
+        }
+        if (codeRecord.status === 'EXPIRED') {
+            return res.status(410).json({ error: "Activation code has expired" });
         }
 
         // 3. Perform Activation (Transaction) — Create Entity and Link
@@ -221,7 +268,7 @@ exports.activateDevice = async (req, res) => {
         // 4. Success
         return res.json({
             success: true,
-            restaurant: result,
+            restaurant: { id: result.id, name: result.name, status: result.status },
             message: "Device activated successfully"
         });
 
@@ -247,6 +294,16 @@ exports.setupPin = async (req, res) => {
             data: {
                 adminPin: hashedAdminPin,
                 kitchenPin: hashedKitchenPin
+            }
+        });
+
+        await prisma.auditLog.create({
+            data: {
+                action: 'PIN_SETUP',
+                actor: 'DEVICE',
+                target: `Restaurant:${restaurantId}`,
+                details: 'Admin and Kitchen PINs configured',
+                severity: 'SECURITY'
             }
         });
 

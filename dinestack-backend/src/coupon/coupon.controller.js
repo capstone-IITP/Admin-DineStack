@@ -26,6 +26,10 @@ exports.createCoupon = async (req, res) => {
             return res.status(400).json({ message: "discountType must be PERCENTAGE or FLAT" });
         }
 
+        if (discountType === "PERCENTAGE" && (discountValue < 0 || discountValue > 100)) {
+            return res.status(400).json({ message: "Percentage discount must be between 0 and 100" });
+        }
+
         const existing = await prisma.coupon.findUnique({ where: { code } });
         if (existing) {
             return res.status(409).json({ message: `Coupon with code "${code}" already exists` });

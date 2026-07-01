@@ -175,7 +175,7 @@ exports.loginSuperAdmin = async (req, res) => {
 
         // Generate access token (short-lived)
         const accessToken = jwt.sign(
-            { adminId: admin.id, role: "SUPER_ADMIN", subRole: admin.role, csrfToken },
+            { adminId: admin.id, role: "SUPER_ADMIN", subRole: admin.role, csrfToken, iss: "dinestack-admin", aud: "dinestack-api" },
             process.env.JWT_SECRET,
             { expiresIn: ACCESS_TOKEN_EXPIRY }
         );
@@ -276,6 +276,14 @@ exports.refreshToken = async (req, res) => {
             });
         }
 
+        const currentIp = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
+        if (storedToken.ipAddress && storedToken.ipAddress !== currentIp) {
+            await logAudit(storedToken.adminId, "TOKEN_REFRESH_IP_MISMATCH", {
+                oldIp: storedToken.ipAddress,
+                newIp: currentIp
+            }, "WARNING", "IP address changed during token refresh");
+        }
+
         // --- Rotate refresh token ---
         // Delete old token
         await prisma.refreshToken.delete({ where: { id: storedToken.id } });
@@ -300,7 +308,7 @@ exports.refreshToken = async (req, res) => {
 
         // Generate new access token
         const accessToken = jwt.sign(
-            { adminId: storedToken.adminId, role: "SUPER_ADMIN", subRole: storedToken.admin.role, csrfToken },
+            { adminId: storedToken.adminId, role: "SUPER_ADMIN", subRole: storedToken.admin.role, csrfToken, iss: "dinestack-admin", aud: "dinestack-api" },
             process.env.JWT_SECRET,
             { expiresIn: ACCESS_TOKEN_EXPIRY }
         );
