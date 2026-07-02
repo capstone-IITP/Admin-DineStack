@@ -425,3 +425,14 @@ model WebhookEvent {
   payload   String
   createdAt DateTime @default(now())
 }
+
+model KitchenDeviceLink {
+  kitchenDeviceId            String   @id
+  restaurantId               String
+  cloudRestaurantId          String
+  deviceFingerprint          String?
+  linkedAt                   DateTime @default(now())
+  lastVerifiedAt             DateTime @default(now())
+  lastSuccessfulVerification DateTime @default(now())
+  status                     String   @default("LINKED") // LINKED | UNLINKED | REVOKED
+}
