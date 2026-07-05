@@ -22,6 +22,9 @@ exports.getAllRestaurants = async (req, res) => {
                 revokedBy: true,
                 revocationReason: true,
                 subscriptionEndsAt: true,
+                trialEndDate: true,
+                planStatus: true,
+                subscriptionStatus: true,
                 _count: {
                     select: { devices: true }
                 }
