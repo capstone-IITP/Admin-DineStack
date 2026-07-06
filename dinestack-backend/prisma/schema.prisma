@@ -147,6 +147,7 @@ model Restaurant {
   payments           Payment[]
   tables             Table[]
   tableSessions      TableSession[]
+  coupons            Coupon[]
 }
 
 enum RestaurantStatus {
@@ -198,6 +199,14 @@ model Order {
   restaurantId String
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+
+  // Discount fields
+  couponId       String?
+  couponCode     String?
+  couponType     String?
+  couponValue    Float?
+  discountAmount Float       @default(0)
+
   customerId   String?
   customer     Customer?   @relation(fields: [customerId], references: [id])
   restaurant   Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
@@ -408,14 +417,21 @@ model Payment {
 
 model Coupon {
   id            String    @id @default(uuid())
-  code          String    @unique
+  code          String
   discountType  String
   discountValue Float
   expiresAt     DateTime?
+  minOrderValue Float?
+  maxDiscount   Float?
   maxUsage      Int?
+  usageCount    Int       @default(0)
   status        String    @default("ACTIVE")
+  restaurantId  String
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @default(now()) @updatedAt
+
+  @@index([restaurantId])
 }
 
 model WebhookEvent {
