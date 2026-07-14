@@ -116,6 +116,12 @@ model Restaurant {
   nextBillingDate    DateTime?
   lastCloudVerification DateTime?
 
+  // GST & Tax Configuration
+  gstEnabled         Boolean          @default(false)
+  gstMode            String           @default("EXCLUSIVE")
+  gstNumber          String?
+  defaultGstRate     Float            @default(5.0)
+
   revokedAt          DateTime?
   revokedBy          String?
   revocationReason   String?
@@ -130,6 +136,9 @@ model Restaurant {
   phone              String?
   recoveryLockUntil  DateTime?
   ownerId            String?          @unique
+  entityVersion      Int              @default(1)
+  lifecycleRevision  Int              @default(1)
+  deletedAt          DateTime?
   
   apiKeys            ApiKey[]
   categories         Category[]
@@ -151,9 +160,15 @@ model Restaurant {
 }
 
 enum RestaurantStatus {
-  ACTIVE
+  PROVISIONED
+  LICENSE_ASSIGNED
+  ACTIVATED
+  RUNNING
+  ACTIVE // Legacy, keeping to prevent immediate errors
   SUSPENDED
   REVOKED
+  DELETED
+  PURGED
 }
 
 // ==========================================

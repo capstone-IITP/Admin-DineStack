@@ -300,7 +300,12 @@ const createRestaurant = async (req, res) => {
         if (!name) return res.status(400).json({ message: "Name is required" });
 
         // Prevent duplicate entity names
-        const existing = await prisma.restaurant.findUnique({ where: { name } });
+        const existing = await prisma.restaurant.findFirst({ 
+            where: { 
+                name,
+                status: { notIn: ['DELETED', 'PURGED'] }
+            } 
+        });
         if (existing) {
             return res.status(409).json({
                 message: `An entity with this name already exists. Use the existing entity instead.`
@@ -310,7 +315,9 @@ const createRestaurant = async (req, res) => {
         const restaurant = await prisma.restaurant.create({
             data: {
                 name,
-                isActive: true
+                isActive: true,
+                entityVersion: 1,
+                lifecycleRevision: 1
             }
         });
 

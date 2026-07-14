@@ -12,7 +12,10 @@ exports.createActivationCode = async (req, res) => {
         }
 
         const existingRestaurant = await prisma.restaurant.findFirst({
-            where: { name: restaurantName }
+            where: { 
+                name: restaurantName,
+                status: { notIn: ['DELETED', 'PURGED'] }
+            }
         });
 
         if (existingRestaurant) {
@@ -200,7 +203,8 @@ exports.activateDevice = async (req, res) => {
                         activationDate,
                         trialEndDate,
                         planStatus,
-                        subscriptionStatus
+                        subscriptionStatus,
+                        lifecycleRevision: { increment: 1 }
                     }
                 });
             } else {
@@ -213,7 +217,9 @@ exports.activateDevice = async (req, res) => {
                         activationDate,
                         trialEndDate,
                         planStatus,
-                        subscriptionStatus
+                        subscriptionStatus,
+                        entityVersion: 1,
+                        lifecycleRevision: 1
                     }
                 });
             }
