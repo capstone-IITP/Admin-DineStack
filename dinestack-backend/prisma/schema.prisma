@@ -174,22 +174,42 @@ model Category {
 }
 
 model MenuItem {
-  id           String      @id @default(uuid())
+  id           String            @id @default(uuid())
   name         String
   description  String?
   price        Float
   image        String?
-  isActive     Boolean     @default(true)
+  isActive     Boolean           @default(true)
   categoryId   String
   restaurantId String
-  createdAt    DateTime    @default(now())
-  category     Category    @relation(fields: [categoryId], references: [id])
-  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  createdAt    DateTime          @default(now())
+  isVariantEnabled Boolean       @default(false)
+  category     Category          @relation(fields: [categoryId], references: [id])
+  restaurant   Restaurant        @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   orderItems   OrderItem[]
+  variants     MenuItemVariant[]
 
   @@index([categoryId])
   @@index([restaurantId])
 }
+
+model MenuItemVariant {
+  id                String      @id @default(uuid())
+  menuItemId        String
+  name              String
+  displayName       String?
+  price             Float
+  isDefault         Boolean     @default(false)
+  isAvailable       Boolean     @default(true)
+  unavailableReason String?
+  unitLabel         String?
+  sortOrder         Int         @default(0)
+  menuItem          MenuItem    @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  orderItems        OrderItem[]
+
+  @@index([menuItemId])
+}
+
 
 model Order {
   id           String      @id @default(uuid())
@@ -220,14 +240,19 @@ model Order {
 }
 
 model OrderItem {
-  id         String   @id @default(uuid())
-  quantity   Int      @default(1)
-  notes      String?
-  orderId    String
-  menuItemId String
-  createdAt  DateTime @default(now())
-  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
-  order      Order    @relation(fields: [orderId], references: [id])
+  id              String           @id @default(uuid())
+  quantity        Int              @default(1)
+  notes           String?
+  orderId         String
+  menuItemId      String
+  variantId       String?
+  variantName     String?
+  variantPrice    Float?
+  variantSnapshot String?
+  createdAt       DateTime         @default(now())
+  menuItem        MenuItem         @relation(fields: [menuItemId], references: [id])
+  variant         MenuItemVariant? @relation(fields: [variantId], references: [id])
+  order           Order            @relation(fields: [orderId], references: [id])
 
   @@index([menuItemId])
   @@index([orderId])
