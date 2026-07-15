@@ -1,5 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../prisma');
 
 class EntityPersistenceService {
     static async applyDeletionTransition(mutatedEntity) {
@@ -35,10 +34,11 @@ class EntityPersistenceService {
             const updated = await tx.restaurant.update({
                 where: { id: mutatedEntity.id },
                 data: {
-                    name: mutatedEntity.name,
                     status: mutatedEntity.status,
                     isActive: mutatedEntity.isActive,
                     deletedAt: mutatedEntity.deletedAt,
+                    archivedDisplayName: mutatedEntity.archivedDisplayName,
+                    deletionMarker: mutatedEntity.deletionMarker,
                     lifecycleRevision: mutatedEntity.lifecycleRevision,
                     entityVersion: mutatedEntity.entityVersion
                 }

@@ -1,10 +1,11 @@
 const prisma = require("../prisma");
+const EntityPolicy = require("../policies/EntityPolicy");
 
 
 exports.getAllRestaurants = async (req, res) => {
     try {
         const { status } = req.query;
-        const where = {};
+        const where = { status: { notIn: EntityPolicy.TERMINAL_STATES } };
         if (status) {
             where.status = status;
         }

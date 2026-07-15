@@ -1,12 +1,19 @@
 class DeletionPolicy {
-    static generateDeletionIdentity(entityName, entityId) {
+    static generateDeletionMarker(entityId) {
         const timestamp = Date.now();
         const shortId = entityId.substring(0, 6);
-        return `${entityName} [DELETED-${timestamp}-${shortId}]`;
+        return `DELETED-${timestamp}-${shortId}`;
+    }
+
+    static buildArchiveMetadata(entityName, entityId) {
+        return {
+            archivedDisplayName: entityName,
+            deletionMarker: DeletionPolicy.generateDeletionMarker(entityId)
+        };
     }
 
     static shouldReleaseNamespace(entityStatus) {
-        return true;
+        return ['DELETED', 'PURGED'].includes(entityStatus);
     }
 }
 

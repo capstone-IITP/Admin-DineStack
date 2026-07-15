@@ -8,13 +8,11 @@ class EntityLifecycleService {
             throw new Error(`Cannot delete entity in state ${entity.status}`);
         }
 
-        const newName = DeletionPolicy.shouldReleaseNamespace(entity.status) 
-            ? DeletionPolicy.generateDeletionIdentity(entity.name, entity.id) 
-            : entity.name;
+        const archiveMetadata = DeletionPolicy.buildArchiveMetadata(entity.name, entity.id);
 
         const mutatedEntity = {
             ...entity,
-            name: newName,
+            ...archiveMetadata,
             status: 'DELETED',
             isActive: false,
             deletedAt: new Date(),

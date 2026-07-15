@@ -1,11 +1,14 @@
-const ACTIVE_STATES = ['PROVISIONED', 'LICENSE_ASSIGNED', 'ACTIVATED', 'RUNNING', 'SUSPENDED', 'REVOKED'];
+const ACTIVE_STATES = ['PROVISIONED', 'LICENSE_ASSIGNED', 'ACTIVATED', 'RUNNING', 'ACTIVE', 'SUSPENDED', 'REVOKED'];
 const TERMINAL_STATES = ['DELETED', 'PURGED'];
 
 class EntityPolicy {
     static ACTIVE_STATES = ACTIVE_STATES;
     static TERMINAL_STATES = TERMINAL_STATES;
-    static isNameReserved(entityStatus) {
-        if (!entityStatus) return false;
+
+    static isNameReserved(entityOrStatus) {
+        const entityStatus = typeof entityOrStatus === 'string'
+            ? entityOrStatus
+            : entityOrStatus?.status;
         return ACTIVE_STATES.includes(entityStatus);
     }
     

@@ -2,6 +2,7 @@ const prisma = require("../prisma");
 const generateCode = require("./code.util");
 const bcrypt = require("bcrypt");
 const { stripHtmlTags } = require("../utils/sanitize.util");
+const EntityPolicy = require("../policies/EntityPolicy");
 
 exports.createActivationCode = async (req, res) => {
     try {
@@ -11,12 +12,10 @@ exports.createActivationCode = async (req, res) => {
             return res.status(400).json({ message: "Restaurant name is required" });
         }
 
-        const existingRestaurant = await prisma.restaurant.findFirst({
-            where: { 
-                name: restaurantName,
-                status: { notIn: ['DELETED', 'PURGED'] }
-            }
+        const existingRecords = await prisma.restaurant.findMany({
+            where: { name: restaurantName }
         });
+        const existingRestaurant = existingRecords.find((restaurant) => EntityPolicy.isNameReserved(restaurant));
 
         if (existingRestaurant) {
             const existingActive = await prisma.activationCode.findFirst({
@@ -228,7 +227,6 @@ exports.activateDevice = async (req, res) => {
             await tx.device.create({
                 data: {
                     restaurantId: restaurant.id,
-                    deviceName: "Primary Node",
                     deviceId: "sys-" + restaurant.id.substring(0, 8),
                     status: "Online",
                     lastSeen: new Date()

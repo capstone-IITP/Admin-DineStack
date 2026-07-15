@@ -1,6 +1,5 @@
 const EntityLifecycleService = require('./EntityLifecycleService');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../prisma');
 
 class EntityDeletionManager {
     static async executeDeletion(entity, userEmail) {

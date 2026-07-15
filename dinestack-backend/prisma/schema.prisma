@@ -96,7 +96,7 @@ model AuditLog {
 
 model Restaurant {
   id                 String           @id @default(uuid())
-  name               String           @unique
+  name               String
   ownerEmail         String?
   status             RestaurantStatus @default(ACTIVE)
   isActive           Boolean?         @default(true)
@@ -139,6 +139,8 @@ model Restaurant {
   entityVersion      Int              @default(1)
   lifecycleRevision  Int              @default(1)
   deletedAt          DateTime?
+  archivedDisplayName String?
+  deletionMarker     String?
   
   apiKeys            ApiKey[]
   categories         Category[]

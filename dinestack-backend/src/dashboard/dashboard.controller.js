@@ -1,5 +1,4 @@
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const prisma = require("../prisma");
 const EntityPolicy = require('../policies/EntityPolicy');
 const EntityLifecycleService = require('../services/EntityLifecycleService');
 const EntityDeletionManager = require('../services/EntityDeletionManager');
@@ -309,7 +308,7 @@ const createRestaurant = async (req, res) => {
         const existingRecords = await prisma.restaurant.findMany({ 
             where: { name } 
         });
-        const existing = existingRecords.find(r => EntityPolicy.isNameReserved(r.status));
+        const existing = existingRecords.find(r => EntityPolicy.isNameReserved(r));
         if (existing) {
             return res.status(409).json({
                 message: `An entity with this name already exists. Use the existing entity instead.`
@@ -319,6 +318,7 @@ const createRestaurant = async (req, res) => {
         const restaurant = await prisma.restaurant.create({
             data: {
                 name,
+                status: 'ACTIVE',
                 isActive: true,
                 entityVersion: 1,
                 lifecycleRevision: 1
