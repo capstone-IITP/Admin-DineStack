@@ -15,4 +15,4 @@ DROP INDEX IF EXISTS "Restaurant_active_name_key";
 
 CREATE UNIQUE INDEX "Restaurant_active_name_key"
 ON "Restaurant"("name")
-WHERE "status"::text NOT IN ('DELETED', 'PURGED');
+WHERE "status" NOT IN ('DELETED', 'PURGED');
