@@ -190,7 +190,7 @@ exports.loginSuperAdmin = async (req, res) => {
             where: {
                 OR: [
                     { expiresAt: { lt: new Date() } },
-                    { adminId: admin.id, expiresAt: { lt: new Date() } } // cleanup helper
+                    { superAdminId: admin.id, expiresAt: { lt: new Date() } } // cleanup helper
                 ]
             }
         }).catch(err => console.error("Clean expired tokens failed:", err));
@@ -199,7 +199,7 @@ exports.loginSuperAdmin = async (req, res) => {
         await prisma.refreshToken.create({
             data: {
                 tokenHash: refreshTokenHash,
-                adminId: admin.id,
+                superAdminId: admin.id,
                 expiresAt: refreshExpiresAt,
                 ipAddress: req.ip || req.headers["x-forwarded-for"] || "127.0.0.1",
                 userAgent: req.headers["user-agent"] || "unknown"
@@ -247,7 +247,7 @@ exports.refreshToken = async (req, res) => {
         // Find the stored token
         const storedToken = await prisma.refreshToken.findUnique({
             where: { tokenHash },
-            include: { admin: true }
+            include: { superAdmin: true }
         });
 
         if (!storedToken) {
@@ -268,7 +268,7 @@ exports.refreshToken = async (req, res) => {
         }
 
         // Check if admin is still active
-        if (!storedToken.admin.isActive) {
+        if (!storedToken.superAdmin.isActive) {
             await prisma.refreshToken.delete({ where: { id: storedToken.id } });
             return res.status(401).json({
                 message: "Account is disabled",
@@ -278,7 +278,7 @@ exports.refreshToken = async (req, res) => {
 
         const currentIp = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
         if (storedToken.ipAddress && storedToken.ipAddress !== currentIp) {
-            await logAudit(storedToken.adminId, "TOKEN_REFRESH_IP_MISMATCH", {
+            await logAudit(storedToken.superAdminId, "TOKEN_REFRESH_IP_MISMATCH", {
                 oldIp: storedToken.ipAddress,
                 newIp: currentIp
             }, "WARNING", "IP address changed during token refresh");
@@ -296,7 +296,7 @@ exports.refreshToken = async (req, res) => {
         await prisma.refreshToken.create({
             data: {
                 tokenHash: newRefreshTokenHash,
-                adminId: storedToken.adminId,
+                superAdminId: storedToken.superAdminId,
                 expiresAt: newExpiresAt,
                 ipAddress: req.ip || req.headers["x-forwarded-for"] || "127.0.0.1",
                 userAgent: req.headers["user-agent"] || "unknown"
@@ -308,12 +308,12 @@ exports.refreshToken = async (req, res) => {
 
         // Generate new access token
         const accessToken = jwt.sign(
-            { adminId: storedToken.adminId, role: "SUPER_ADMIN", subRole: storedToken.admin.role, csrfToken, iss: "dinestack-admin", aud: "dinestack-api" },
+            { adminId: storedToken.superAdminId, role: "SUPER_ADMIN", subRole: storedToken.superAdmin.role, csrfToken, iss: "dinestack-admin", aud: "dinestack-api" },
             process.env.JWT_SECRET,
             { expiresIn: ACCESS_TOKEN_EXPIRY }
         );
 
-        await logAudit(storedToken.adminId, "TOKEN_REFRESH", null);
+        await logAudit(storedToken.superAdminId, "TOKEN_REFRESH", null);
 
         // Set new tokens in cookies and CSRF in standard cookie
         res.cookie("access_token", accessToken, getAccessCookieOptions());
@@ -379,16 +379,16 @@ exports.getActiveSessions = async (req, res) => {
         
         // If not OWNER, only show current user's sessions
         if (currentUser.role !== "OWNER") {
-            where.adminId = currentUser.id;
+            where.superAdminId = currentUser.id;
         } else if (req.query.adminId) {
             // OWNER can filter by adminId
-            where.adminId = req.query.adminId;
+            where.superAdminId = req.query.adminId;
         }
 
         const sessions = await prisma.refreshToken.findMany({
             where,
             include: {
-                admin: {
+                superAdmin: {
                     select: {
                         email: true,
                         role: true
@@ -400,9 +400,9 @@ exports.getActiveSessions = async (req, res) => {
 
         const formatted = sessions.map(s => ({
             id: s.id,
-            adminId: s.adminId,
-            email: s.admin.email,
-            role: s.admin.role,
+            adminId: s.superAdminId,
+            email: s.superAdmin?.email,
+            role: s.superAdmin?.role,
             createdAt: s.createdAt,
             expiresAt: s.expiresAt,
             ipAddress: s.ipAddress || "unknown",
@@ -429,7 +429,7 @@ exports.revokeSession = async (req, res) => {
 
         const session = await prisma.refreshToken.findUnique({
             where: { id: sessionId },
-            include: { admin: true }
+            include: { superAdmin: true }
         });
 
         if (!session) {
@@ -437,7 +437,7 @@ exports.revokeSession = async (req, res) => {
         }
 
         // Restrict non-owners to their own sessions
-        if (currentUser.role !== "OWNER" && session.adminId !== currentUser.id) {
+        if (currentUser.role !== "OWNER" && session.superAdminId !== currentUser.id) {
             return res.status(403).json({ message: "Unauthorized to revoke this session" });
         }
 
@@ -446,8 +446,8 @@ exports.revokeSession = async (req, res) => {
         });
 
         await logAudit(currentUser.id, "SESSION_REVOKE", {
-            targetAdminId: session.adminId,
-            targetEmail: session.admin.email,
+            targetAdminId: session.superAdminId,
+            targetEmail: session.superAdmin?.email,
             ip: session.ipAddress
         });
 
@@ -481,7 +481,7 @@ exports.revokeAllSessions = async (req, res) => {
 
         // Delete all active refresh tokens for the target user
         await prisma.refreshToken.deleteMany({
-            where: { adminId: targetAdminId }
+            where: { superAdminId: targetAdminId }
         });
 
         await logAudit(currentUser.id, "SESSION_REVOKE_ALL", {

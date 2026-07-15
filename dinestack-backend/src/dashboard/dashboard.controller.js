@@ -1,5 +1,8 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const EntityPolicy = require('../policies/EntityPolicy');
+const EntityLifecycleService = require('../services/EntityLifecycleService');
+const EntityDeletionManager = require('../services/EntityDeletionManager');
 
 const getDashboardStats = async (req, res) => {
     try {
@@ -56,11 +59,14 @@ const getRestaurants = async (req, res) => {
         let restaurants = [];
         try {
             restaurants = await prisma.restaurant.findMany({
+                where: {
+                    status: { notIn: EntityPolicy.TERMINAL_STATES }
+                },
                 include: { _count: { select: { devices: true } } }
             });
         } catch (dbError) {
             console.warn("Prisma findMany failed for Restaurants (schema mismatch), falling back to raw query.");
-            restaurants = await prisma.$queryRaw`SELECT * FROM "Restaurant"`;
+            restaurants = await prisma.$queryRaw`SELECT * FROM "Restaurant" WHERE "status" NOT IN ('DELETED', 'PURGED')`;
             // For raw queries, we won't have _count.devices, so default it to 0
             restaurants = restaurants.map(r => ({ ...r, _count: { devices: 0 } }));
         }
@@ -300,12 +306,10 @@ const createRestaurant = async (req, res) => {
         if (!name) return res.status(400).json({ message: "Name is required" });
 
         // Prevent duplicate entity names
-        const existing = await prisma.restaurant.findFirst({ 
-            where: { 
-                name,
-                status: { notIn: ['DELETED', 'PURGED'] }
-            } 
+        const existingRecords = await prisma.restaurant.findMany({ 
+            where: { name } 
         });
+        const existing = existingRecords.find(r => EntityPolicy.isNameReserved(r.status));
         if (existing) {
             return res.status(409).json({
                 message: `An entity with this name already exists. Use the existing entity instead.`
@@ -352,93 +356,15 @@ const createRestaurant = async (req, res) => {
 const deleteRestaurant = async (req, res) => {
     try {
         const { id } = req.params;
+        const restaurant = await prisma.restaurant.findUnique({ where: { id } });
+        if (!restaurant) {
+            return res.status(404).json({ error: "Restaurant entity not found" });
+        }
 
-        const result = await prisma.$transaction(async (tx) => {
-            const restaurant = await tx.restaurant.findUnique({ where: { id } });
-            if (!restaurant) {
-                throw new Error("Restaurant entity not found");
-            }
-
-            // 1. Delete TableSessions
-            await tx.tableSession.deleteMany({ where: { restaurantId: id } });
-
-            // 2. Delete PairCodes
-            await tx.pairCode.deleteMany({ where: { restaurantId: id } });
-
-            // 3. Delete OrderItems
-            const orders = await tx.order.findMany({ where: { restaurantId: id }, select: { id: true } });
-            const orderIds = orders.map(o => o.id);
-            if (orderIds.length > 0) {
-                await tx.orderItem.deleteMany({ where: { orderId: { in: orderIds } } });
-            }
-
-            // 4. Delete Orders
-            await tx.order.deleteMany({ where: { restaurantId: id } });
-
-            // 5. Delete Sessions
-            await tx.session.deleteMany({ where: { restaurantId: id } });
-
-            // 6. Delete MenuItems
-            await tx.menuItem.deleteMany({ where: { restaurantId: id } });
-
-            // 7. Delete Categories
-            await tx.category.deleteMany({ where: { restaurantId: id } });
-
-            // 8. Delete Tables
-            await tx.table.deleteMany({ where: { restaurantId: id } });
-
-            // 9. Delete RecoveryCodes
-            await tx.recoveryCode.deleteMany({ where: { restaurantId: id } });
-
-            // 10. Delete Customers
-            await tx.customer.deleteMany({ where: { restaurantId: id } });
-
-            // 11. Delete Devices
-            await tx.device.deleteMany({ where: { restaurantId: id } });
-
-            // Delete ApiKeys
-            await tx.apiKey.deleteMany({ where: { restaurantId: id } });
-
-            // Delete RefreshTokens
-            await tx.refreshToken.deleteMany({ where: { restaurantId: id } });
-
-            // Delete Subscriptions
-            await tx.subscription.deleteMany({ where: { restaurantId: id } });
-
-            // Delete Payments
-            await tx.payment.deleteMany({ where: { restaurantId: id } });
-
-            // 12. Clear circular reference
-            await tx.restaurant.update({
-                where: { id },
-                data: { activationCodeId: null }
-            });
-
-            // 13. Delete ActivationCodes
-            await tx.activationCode.deleteMany({ where: { restaurantId: id } });
-
-            // 14. Delete Restaurant itself
-            const deleted = await tx.restaurant.delete({ where: { id } });
-
-            // Log hard delete audit (CRITICAL severity)
-            await tx.auditLog.create({
-                data: {
-                    action: 'ENTITY_DELETE_HARD',
-                    actor: req.user.email,
-                    target: `Restaurant:${id}`,
-                    details: `Hard deleted restaurant "${restaurant.name}" and all associated data`,
-                    severity: 'CRITICAL'
-                }
-            });
-
-            return deleted;
-        }, {
-            maxWait: 15000,
-            timeout: 30000
-        });
-
+        const result = await EntityDeletionManager.executeDeletion(restaurant, req.user?.email || 'SYSTEM');
         res.json({ message: "Restaurant deleted successfully", restaurant: result });
     } catch (error) {
+        console.error("Delete Error:", error);
         res.status(500).json({ error: "Failed to delete restaurant" });
     }
 };
@@ -452,56 +378,26 @@ const updateRestaurantStatus = async (req, res) => {
             return res.status(400).json({ message: "Invalid status" });
         }
 
-        const result = await prisma.$transaction(async (tx) => {
-            const updateData = {
-                status,
-                isActive: status === 'ACTIVE', // Keep legacy field in sync
-            };
+        const restaurant = await prisma.restaurant.findUnique({ where: { id } });
+        if (!restaurant) {
+            return res.status(404).json({ error: "Restaurant entity not found" });
+        }
 
-            if (status === 'REVOKED' || status === 'SUSPENDED') {
-                updateData.revokedAt = new Date();
-                updateData.revokedBy = revokedBy || req.user.email || "Super Admin";
-                updateData.revocationReason = reason;
+        const updatedRest = await EntityLifecycleService.updateStatus(restaurant, status, reason, revokedBy || req.user?.email || "Super Admin");
 
-                // Invalidate Activation Codes associated with this restaurant (use FK, not name)
-                await tx.activationCode.updateMany({
-                    where: {
-                        restaurantId: id,
-                        isUsed: false,
-                        status: 'ACTIVE'
-                    },
-                    data: {
-                        status: 'INVALIDATED'
-                    }
-                });
-            } else {
-                // Reactivation
-                updateData.revokedAt = null;
-                updateData.revokedBy = null;
-                updateData.revocationReason = null;
+        await prisma.auditLog.create({
+            data: {
+                action: 'STATUS_CHANGE',
+                actor: req.user?.email || "SYSTEM",
+                target: `Restaurant:${id}`,
+                details: `Updated status of restaurant "${updatedRest.name}" to ${status}. Reason: ${reason || "None specified"}.`,
+                severity: (status === 'REVOKED' || status === 'SUSPENDED') ? 'CRITICAL' : 'WARNING'
             }
-
-            const updatedRest = await tx.restaurant.update({
-                where: { id },
-                data: updateData
-            });
-
-            // Write status change log
-            await tx.auditLog.create({
-                data: {
-                    action: 'STATUS_CHANGE',
-                    actor: req.user.email,
-                    target: `Restaurant:${id}`,
-                    details: `Updated status of restaurant "${updatedRest.name}" to ${status}. Reason: ${reason || "None specified"}.`,
-                    severity: (status === 'REVOKED' || status === 'SUSPENDED') ? 'CRITICAL' : 'WARNING'
-                }
-            });
-
-            return updatedRest;
         });
 
-        res.json(result);
+        res.json(updatedRest);
     } catch (error) {
+        console.error("Status Update Error:", error);
         res.status(500).json({ error: "Failed to update restaurant status" });
     }
 };
